@@ -1,0 +1,20 @@
+services:
+  rofl-oracle:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    platform: linux/amd64
+    container_name: rofl_header_oracle
+    environment:
+      # Source chain configuration
+      SOURCE_RPC_URL: ${SOURCE_RPC_URL:-https://ethereum.publicnode.com}
+      SOURCE_CHAIN_ID: ${SOURCE_CHAIN_ID:-1}
+      
+      # Target Sapphire network configuration
+      NETWORK: ${NETWORK:-sapphire-testnet}
+      CONTRACT_ADDRESS: ${CONTRACT_ADDRESS:-}  # Required - ROFLAdapter contract address
+      
+      # Oracle configuration
+      POLLING_INTERVAL: ${POLLING_INTERVAL:-12}  # Seconds between block checks
+    
+    restart: unless-stopped

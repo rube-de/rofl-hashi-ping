@@ -34,7 +34,7 @@ class RoflUtility:
             "tx": {
                 "eth": {
                     **tx
-                }
+                },
             },
             "encrypt": False,
         }
