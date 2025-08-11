@@ -1,3 +1,3 @@
 [submodule "packages/hashi"]
 	path = packages/hashi
-	url = https://github.com/gnosis/hashi
+	url = https://github.com/rube-de/hashi
