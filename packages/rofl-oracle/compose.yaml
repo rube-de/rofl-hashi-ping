@@ -1,8 +1,9 @@
 services:
-  rofl-oracle:
+  header-oracle:
     build:
       context: .
       dockerfile: Dockerfile
+    image: ghcr.io/rube-de/rofl-header-oracle:latest
     platform: linux/amd64
     container_name: rofl_header_oracle
     environment:
