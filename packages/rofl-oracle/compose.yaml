@@ -19,3 +19,5 @@ services:
       POLLING_INTERVAL: ${POLLING_INTERVAL:-12}  # Seconds between block checks
     
     restart: unless-stopped
+    volumes:
+      - /run/rofl-appd.sock:/run/rofl-appd.sock

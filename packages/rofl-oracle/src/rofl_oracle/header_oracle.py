@@ -1,5 +1,6 @@
 import os
 import time
+from typing import Any, Dict, Optional
 
 from eth_typing import HexStr
 from web3 import Web3
@@ -15,7 +16,7 @@ class HeaderOracle:
     and submits them to the ROFLAdapter contract on Oasis Sapphire.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """
         Initialize the HeaderOracle.
         All configuration is read from environment variables.
@@ -55,7 +56,7 @@ class HeaderOracle:
         print(f"  Contract Address: {self.contract_address}")
         print(f"  Polling Interval: {self.polling_interval}s")
 
-    def _load_config(self):
+    def _load_config(self) -> None:
         """
         Load configuration from environment variables.
         """
@@ -78,7 +79,7 @@ class HeaderOracle:
         # Oracle configuration
         self.polling_interval = int(os.environ.get("POLLING_INTERVAL", "12"))
 
-    def _load_rofl_adapter_abi(self) -> list:
+    def _load_rofl_adapter_abi(self) -> list[Dict[str, Any]]:
         """
         Load the ROFLAdapter ABI.
         For now, we'll define it inline based on the contract interface.
@@ -98,7 +99,7 @@ class HeaderOracle:
             }
         ]
 
-    def fetch_latest_block(self) -> BlockData | None:
+    def fetch_latest_block(self) -> Optional[BlockData]:
         """
         Fetch the latest block from the source chain.
 
@@ -111,7 +112,7 @@ class HeaderOracle:
             print(f"Error fetching latest block: {e}")
             return None
 
-    def submit_block_header(self, block_number: int, block_hash: HexStr) -> bool:
+    def submit_block_header(self, block_number: int, block_hash: str) -> bool:
         """
         Submit a block header to the ROFLAdapter contract.
 
@@ -120,35 +121,24 @@ class HeaderOracle:
         :return: True if submission was successful, False otherwise
         """
         try:
-            # Build the transaction
-            function = self.contract.functions.storeBlockHeader(
+            # Build and submit the transaction
+            tx_params = self.contract.functions.storeBlockHeader(
                 self.source_chain_id, block_number, block_hash
-            )
-
-            # Get the transaction data
-            tx_data = function.build_transaction(
-                {
-                    "from": self.contract_utility.w3.eth.default_account,
-                    "nonce": self.contract_utility.w3.eth.get_transaction_count(
-                        self.contract_utility.w3.eth.default_account
-                    ),
-                    "gas": 200000,
-                    "gasPrice": self.contract_utility.w3.eth.gas_price,
-                }
-            )
-
-            # Submit the transaction using ROFL utility
+            ).build_transaction({'gasPrice': self.contract_utility.w3.eth.gas_price})
+            
             print(f"Submitting block header for block {block_number}")
-            result = self.rofl_utility.submit_tx(tx_data)
-
-            print(f"Transaction submitted: {result}")
+            tx_hash = self.rofl_utility.submit_tx(tx_params)
+            
+            # Wait for transaction receipt
+            tx_receipt = self.contract_utility.w3.eth.wait_for_transaction_receipt(tx_hash)
+            print(f"Transaction submitted. Hash: {tx_receipt.transactionHash.hex()}")
             return True
 
         except Exception as e:
             print(f"Error submitting block header: {e}")
             return False
 
-    def run(self):
+    def run(self) -> None:
         """
         Main loop that continuously fetches and submits block headers.
         """
@@ -159,24 +149,30 @@ class HeaderOracle:
                 # Fetch the latest block
                 block = self.fetch_latest_block()
 
-                if block and block["number"] > self.last_processed_block:
-                    # Submit the block header
-                    success = self.submit_block_header(
-                        block["number"], block["hash"].hex()
-                    )
+                if block:
+                    block_number = block.get("number")
+                    block_hash = block.get("hash")
+                    
+                    if block_number is not None and block_hash is not None and block_number > self.last_processed_block:
+                        # Convert block_hash to hex string with 0x prefix
+                        block_hash_hex = block_hash.hex() if isinstance(block_hash, bytes) else block_hash
+                        if not block_hash_hex.startswith('0x'):
+                            block_hash_hex = '0x' + block_hash_hex
+                        
+                        # Submit the block header
+                        success = self.submit_block_header(
+                            block_number, block_hash_hex
+                        )
 
-                    if success:
-                        self.last_processed_block = block["number"]
-                        print(f"Successfully processed block {block['number']}")
-                    else:
-                        print(f"Failed to process block {block['number']}, will retry")
+                        if success:
+                            self.last_processed_block = block_number
+                            print(f"Successfully processed block {block_number}")
+                        else:
+                            print(f"Failed to process block {block_number}, will retry")
 
                 # Wait before next poll
                 time.sleep(self.polling_interval)
 
-            except KeyboardInterrupt:
-                print("Shutting down HeaderOracle...")
-                break
             except Exception as e:
                 print(f"Error in main loop: {e}")
                 time.sleep(self.polling_interval)
