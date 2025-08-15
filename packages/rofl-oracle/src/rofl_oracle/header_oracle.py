@@ -121,18 +121,34 @@ class HeaderOracle:
         :return: True if submission was successful, False otherwise
         """
         try:
-            # Build and submit the transaction
+            # Build the transaction with required fields for ROFL
+            # ROFL will handle nonce, from address, and signing
             tx_params = self.contract.functions.storeBlockHeader(
                 self.source_chain_id, block_number, block_hash
-            ).build_transaction({'gasPrice': self.contract_utility.w3.eth.gas_price})
+            ).build_transaction({
+                'gas': 300000,  # Set explicit gas limit
+                'gasPrice': self.contract_utility.w3.eth.gas_price,
+                'value': 0  # No ETH value for this transaction
+            })
             
-            print(f"Submitting block header for block {block_number}")
-            tx_hash = self.rofl_utility.submit_tx(tx_params)
+            print(f"Submitting block header for block {block_number}, hash: {block_hash}")
             
-            # Wait for transaction receipt
-            tx_receipt = self.contract_utility.w3.eth.wait_for_transaction_receipt(tx_hash)
-            print(f"Transaction submitted. Hash: {tx_receipt.transactionHash.hex()}")
-            return True
+            try:
+                tx_hash = self.rofl_utility.submit_tx(tx_params)
+                print(f"Transaction hash received: {tx_hash}")
+                
+                # Convert the returned hash for web3
+                from hexbytes import HexBytes
+                tx_hash_hex = tx_hash if tx_hash.startswith('0x') else f'0x{tx_hash}'
+                tx_hash_bytes = HexBytes(tx_hash_hex)
+                
+                # Wait for transaction receipt
+                tx_receipt = self.contract_utility.w3.eth.wait_for_transaction_receipt(tx_hash_bytes)
+                print(f"Transaction confirmed. Hash: {tx_receipt['transactionHash'].hex()}")
+                return True
+            except Exception as submit_error:
+                print(f"Transaction submission failed: {submit_error}")
+                return False
 
         except Exception as e:
             print(f"Error submitting block header: {e}")
