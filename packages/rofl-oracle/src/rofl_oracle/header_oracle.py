@@ -1,10 +1,11 @@
 import os
 import time
+import codecs
 from typing import Any, Dict, Optional
 
-from eth_typing import HexStr
+import cbor2
 from web3 import Web3
-from web3.types import BlockData
+from web3.types import BlockData, TxParams, Wei
 
 from .utils.contract_utility import ContractUtility
 from .utils.rofl_utility import RoflUtility
@@ -99,6 +100,22 @@ class HeaderOracle:
             }
         ]
 
+    def _decode_rofl_response(self, response_hex: str) -> Dict[str, Any]:
+        """
+        Decode CBOR response from ROFL service.
+        
+        :param response_hex: Hex-encoded CBOR response
+        :return: Decoded CBOR data as dictionary
+        """
+        try:
+            data_bytes = codecs.decode(response_hex, "hex")
+            cbor_result = cbor2.loads(data_bytes)
+            print(f"  Decoded CBOR: {cbor_result}")
+            return cbor_result if isinstance(cbor_result, dict) else {"data": cbor_result}
+        except Exception as decode_error:
+            print(f"  CBOR decode error: {decode_error}")
+            return {"error": "decode_failed", "raw": response_hex}
+
     def fetch_latest_block(self) -> Optional[BlockData]:
         """
         Fetch the latest block from the source chain.
@@ -123,29 +140,35 @@ class HeaderOracle:
         try:
             # Build the transaction with required fields for ROFL
             # ROFL will handle nonce, from address, and signing
-            tx_params = self.contract.functions.storeBlockHeader(
-                self.source_chain_id, block_number, block_hash
-            ).build_transaction({
+            tx_dict: TxParams = {
                 'gas': 300000,  # Set explicit gas limit
                 'gasPrice': self.contract_utility.w3.eth.gas_price,
-                'value': 0  # No ETH value for this transaction
-            })
+                'value': Wei(0)  # No ETH value for this transaction
+            }
+            tx_params = self.contract.functions.storeBlockHeader(
+                self.source_chain_id, block_number, block_hash
+            ).build_transaction(tx_dict)
             
             print(f"Submitting block header for block {block_number}, hash: {block_hash}")
             
             try:
-                tx_hash = self.rofl_utility.submit_tx(tx_params)
-                print(f"Transaction hash received: {tx_hash}")
+                rofl_response = self.rofl_utility.submit_tx(tx_params)
+                print(f"ROFL response received: {rofl_response}")
                 
-                # Convert the returned hash for web3
-                from hexbytes import HexBytes
-                tx_hash_hex = tx_hash if tx_hash.startswith('0x') else f'0x{tx_hash}'
-                tx_hash_bytes = HexBytes(tx_hash_hex)
+                # Decode CBOR response to check for success
+                decoded_response = self._decode_rofl_response(rofl_response)
                 
-                # Wait for transaction receipt
-                tx_receipt = self.contract_utility.w3.eth.wait_for_transaction_receipt(tx_hash_bytes)
-                print(f"Transaction confirmed. Hash: {tx_receipt['transactionHash'].hex()}")
-                return True
+                # Check for success indicator as done in the demo
+                if 'ok' in decoded_response:
+                    print("  ✓ Transaction submitted successfully to ROFL")
+                    return True
+                elif 'error' in decoded_response:
+                    print(f"  ✗ ROFL transaction failed: {decoded_response}")
+                    return False
+                else:
+                    print(f"  ⚠ Unknown ROFL response format: {decoded_response}")
+                    # If no clear error, assume success (ROFL accepted the transaction)
+                    return True
             except Exception as submit_error:
                 print(f"Transaction submission failed: {submit_error}")
                 return False

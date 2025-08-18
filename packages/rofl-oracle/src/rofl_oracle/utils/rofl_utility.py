@@ -72,5 +72,7 @@ class RoflUtility:
         print(f"  Formatted payload: {json.dumps(payload, indent=2)}")
 
         result = self._appd_post(path, payload)
-        print(f"  Response received: {result}")
-        return result["data"]
+        print(f"  ROFL response: {json.dumps(result, indent=2)}")
+        
+        # Return the raw data field - let the caller handle interpretation
+        return result.get("data", "")
