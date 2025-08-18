@@ -38,6 +38,9 @@ class HeaderOracle:
             raise Exception(
                 f"Failed to connect to source chain at {self.source_rpc_url}"
             )
+        
+        # Fetch chain ID from the connected RPC endpoint
+        self.source_chain_id = self.source_w3.eth.chain_id
 
         # Load ROFLAdapter ABI
         self.rofl_adapter_abi = self._load_rofl_adapter_abi()
@@ -75,7 +78,6 @@ class HeaderOracle:
         self.source_rpc_url = os.environ.get(
             "SOURCE_RPC_URL", "https://ethereum.publicnode.com"
         )
-        self.source_chain_id = int(os.environ.get("SOURCE_CHAIN_ID", "1"))
 
         # Oracle configuration
         self.polling_interval = int(os.environ.get("POLLING_INTERVAL", "12"))

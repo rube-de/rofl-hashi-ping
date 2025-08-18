@@ -31,8 +31,8 @@ deployments:
           min_tcb_evaluation_data_number: 18
           tdx: {}
       enclaves:
-        - otEWrI5NrN3kNNMBLkaITu6Ii9wrtWX0Nxf2ye5sLRkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
-        - tQjvS0toLrOa6ClEFLeXFd0vrFe0d74StpmwxpUN9UYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+        - id: dZENTcGiwOsd6p+lEPrUb6rA1bFjVX2Pw3+cRKjx2zUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+        - id: ooBjlHw4JNkkbv1VRwoQCjXnCo1lzvD225b2+IxzAggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
       endorsements:
         - any: {}
       fees: endorsing_node
@@ -40,3 +40,5 @@ deployments:
     secrets:
       - name: CONTRACT_ADDRESS
         value: pGJwa1ggK2DxUQ/kPsj8wg0noD3a5GO2iJQr+3f+KmgFU2eyaiRkbmFtZVggGJznJsR5w7u7IhMRtzDNX5JMCZh30+aoT8blVdqCufBlbm9uY2VP1K4y8Ttrk3K3nqZvLDFZZXZhbHVlWDp0kA9vxLZH04AYXBREXgh5RuOmI14m1tFdcgonI/ufAzmEcQRwkREWc1YXm9aiQLbXyTaFpMPXQ+/X
+      - name: SOURCE_RPC_URL
+        value: pGJwa1ggXCt/56urhP+aJj5ElVy5LiD6MfdojMfAOW0mxLxEAzxkbmFtZVgeScHrM25oAX5RcBz3wPLlQBHvtETy32V8645MntE6ZW5vbmNlT3UrptEIGdt9l2U2Tl6UUWV2YWx1ZVhVBteIV2zkgZAxrbtMKGgJLdM7h/Fsr2y3pESVRrnhRGNSs+yk9MhiKS4SddDv/08JQHN4/2lng/3nYz7i83XGK9qict3Mv/yO1XEalK9suyadW93//w==

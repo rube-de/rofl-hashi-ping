@@ -9,7 +9,6 @@ services:
     environment:
       # Source chain configuration
       SOURCE_RPC_URL: ${SOURCE_RPC_URL:-https://ethereum.publicnode.com}
-      SOURCE_CHAIN_ID: ${SOURCE_CHAIN_ID:-1}
       
       # Target Sapphire network configuration
       NETWORK: ${NETWORK:-sapphire-testnet}

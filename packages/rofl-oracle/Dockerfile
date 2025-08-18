@@ -25,7 +25,6 @@ COPY src/ ./src/
 
 # Set environment variables (can be overridden by compose.yaml)
 ENV SOURCE_RPC_URL=https://ethereum.publicnode.com
-ENV SOURCE_CHAIN_ID=1
 ENV POLLING_INTERVAL=12
 ENV NETWORK=sapphire-testnet
 ENV CONTRACT_ADDRESS=""
