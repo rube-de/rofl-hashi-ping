@@ -6,7 +6,7 @@ services:
     image: ghcr.io/rube-de/rofl-header-oracle:latest
     platform: linux/amd64
     container_name: rofl_header_oracle
-    entrypoint: /bin/sh -c 'uv run python main.py'
+    entrypoint: /bin/sh -c 'uv run python main.py --local'
     environment:
       # Python configuration
       PYTHONUNBUFFERED: 1  # Disable output buffering for immediate log visibility
@@ -21,7 +21,9 @@ services:
       
       # Oracle configuration
       POLLING_INTERVAL: ${POLLING_INTERVAL:-12}  # Seconds between event checks
+      
+      # Local mode configuration (for testing without ROFL)
+      LOCAL_PRIVATE_KEY: ${LOCAL_PRIVATE_KEY:-}  # Required in local mode - private key for testing
     
     restart: on-failure
-    volumes:
-      - /run/rofl-appd.sock:/run/rofl-appd.sock
+    # Note: No ROFL socket volume mount needed in local mode

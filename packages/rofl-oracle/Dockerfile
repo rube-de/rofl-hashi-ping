@@ -23,11 +23,5 @@ RUN uv sync --frozen
 COPY main.py ./
 COPY src/ ./src/
 
-# Set environment variables (can be overridden by compose.yaml)
-ENV SOURCE_RPC_URL=https://ethereum.publicnode.com
-ENV POLLING_INTERVAL=12
-ENV NETWORK=sapphire-testnet
-ENV CONTRACT_ADDRESS=""
-
 # Run the oracle
-CMD ["uv", "run", "python", "main.py"]
+ENTRYPOINT ["uv", "run", "python", "main.py"]
