@@ -97,12 +97,28 @@ task("request:block-header", "Request a block header using the deployed contract
     const { ethers } = hre;
     
     // Get chain ID from network if not provided
-    const chainId = taskArgs.chainid || (await ethers.provider.getNetwork()).chainId;
+    let chainId: bigint;
+    if (taskArgs.chainid !== undefined) {
+      chainId = BigInt(taskArgs.chainid);
+      console.log(`Using provided chain ID: ${chainId}`);
+    } else {
+      const network = await ethers.provider.getNetwork();
+      chainId = network.chainId;
+      console.log(`Using current network chain ID: ${chainId}`);
+    }
     
     // Get latest block number if not provided
-    const blockNumber = taskArgs.blocknumber || await ethers.provider.getBlockNumber();
+    let blockNumber: bigint;
+    if (taskArgs.blocknumber !== undefined) {
+      blockNumber = BigInt(taskArgs.blocknumber);
+      console.log(`Using provided block number: ${blockNumber}`);
+    } else {
+      const latestBlockNumber = await ethers.provider.getBlockNumber();
+      blockNumber = BigInt(latestBlockNumber);
+      console.log(`Using latest block number: ${blockNumber}`);
+    }
     
-    console.log("Requesting block header...");
+    console.log("\n=== Requesting Block Header ===");
     console.log("Contract:", taskArgs.contract);
     console.log("Chain ID:", chainId.toString());
     console.log("Block Number:", blockNumber.toString());
@@ -162,10 +178,30 @@ task("request:block-header", "Request a block header using the deployed contract
 // Task to check if a block was requested
 task("check:block-requested", "Check if a block header was already requested")
   .addParam("contract", "The BlockHeaderRequester contract address")
-  .addParam("chainid", "The chain ID")
-  .addParam("blocknumber", "The block number")
+  .addOptionalParam("chainid", "The chain ID (defaults to current network)")
+  .addOptionalParam("blocknumber", "The block number", "9027784")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;
+    
+    // Get chain ID from network if not provided
+    let chainId: bigint;
+    if (taskArgs.chainid !== undefined) {
+      chainId = BigInt(taskArgs.chainid);
+    } else {
+      const network = await ethers.provider.getNetwork();
+      chainId = network.chainId;
+      console.log(`Using current network chain ID: ${chainId}`);
+    }
+    
+    // Get latest block number if not provided
+    let blockNumber: bigint;
+    if (taskArgs.blocknumber !== undefined) {
+      blockNumber = BigInt(taskArgs.blocknumber);
+    } else {
+      const latestBlockNumber = await ethers.provider.getBlockNumber();
+      blockNumber = BigInt(latestBlockNumber);
+      console.log(`Using latest block number: ${blockNumber}`);
+    }
     
     const blockHeaderRequester = await ethers.getContractAt(
       "BlockHeaderRequester",
@@ -173,18 +209,18 @@ task("check:block-requested", "Check if a block header was already requested")
     );
     
     const isRequested = await blockHeaderRequester.isBlockRequested(
-      taskArgs.chainid,
-      taskArgs.blocknumber
+      chainId,
+      blockNumber
     );
     
     const requestId = await blockHeaderRequester.getRequestId(
-      taskArgs.chainid,
-      taskArgs.blocknumber
+      chainId,
+      blockNumber
     );
     
     console.log("\n=== Block Request Status ===");
-    console.log("Chain ID:", taskArgs.chainid);
-    console.log("Block Number:", taskArgs.blocknumber);
+    console.log("Chain ID:", chainId.toString());
+    console.log("Block Number:", blockNumber.toString());
     console.log("Request ID:", requestId);
     console.log("Status:", isRequested ? "✅ Already Requested" : "❌ Not Requested");
     console.log("===========================\n");
