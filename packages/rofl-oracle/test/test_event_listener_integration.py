@@ -1,5 +1,5 @@
 """
-ydodIntegration test for EventListenerUtility with real blockchain data.
+Integration test for EventListenerUtility with real blockchain data.
 
 Tests WebSocket event listening for BlockHeaderRequested events using:
 - Real Sepolia testnet data
