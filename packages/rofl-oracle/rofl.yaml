@@ -1,0 +1,46 @@
+name: rofl-oracle
+version: 0.1.0
+tee: tdx
+kind: container
+resources:
+  memory: 2048
+  cpus: 2
+  storage:
+    kind: disk-persistent
+    size: 10000
+artifacts:
+  firmware: https://github.com/oasisprotocol/oasis-boot/releases/download/v0.5.0/ovmf.tdx.fd#db47100a7d6a0c1f6983be224137c3f8d7cb09b63bb1c7a5ee7829d8e994a42f
+  kernel: https://github.com/oasisprotocol/oasis-boot/releases/download/v0.5.0/stage1.bin#23877530413a661e9187aad2eccfc9660fc4f1a864a1fbad2f6c7d43512071ca
+  stage2: https://github.com/oasisprotocol/oasis-boot/releases/download/v0.5.0/stage2-podman.tar.bz2#631349bef06990dd6ae882812a0420f4b35f87f9fe945b274bcfb10fc08c4ea3
+  container:
+    runtime: https://github.com/oasisprotocol/oasis-sdk/releases/download/rofl-containers%2Fv0.6.0/rofl-containers#bed48a05eb946e2316caa9e7b3091c7f7abff35c3f1e791b4afbd64a5d331b2a
+    compose: compose.yaml
+deployments:
+  default:
+    app_id: rofl1qq0vjaslu4nl7tlgzg87jdst0kzkzjgtjsnfmkvl
+    network: testnet
+    paratime: sapphire
+    admin: myaccount
+    trust_root:
+      height: 27930709
+      hash: 18c7bbd56b2eb638642ec85c8d731e594b27d60193d7eabf0dcb091f275b7a32
+    policy:
+      quotes:
+        pcs:
+          tcb_validity_period: 30
+          min_tcb_evaluation_data_number: 18
+          tdx: {}
+      enclaves:
+        - b/gAoG8iR1r2/6sUmXyh6mo1Xr3s4ZouUxxkcHrXhcUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+        - 9QcXgJWlog61JHjyicbx2pWoJP5UTbNKR3P62eZIrJQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+      endorsements:
+        - any: {}
+      fees: endorsing_node
+      max_expiration: 3
+    secrets:
+      - name: CONTRACT_ADDRESS
+        value: pGJwa1ggK2DxUQ/kPsj8wg0noD3a5GO2iJQr+3f+KmgFU2eyaiRkbmFtZVggGJznJsR5w7u7IhMRtzDNX5JMCZh30+aoT8blVdqCufBlbm9uY2VP1K4y8Ttrk3K3nqZvLDFZZXZhbHVlWDp0kA9vxLZH04AYXBREXgh5RuOmI14m1tFdcgonI/ufAzmEcQRwkREWc1YXm9aiQLbXyTaFpMPXQ+/X
+      - name: SOURCE_RPC_URL
+        value: pGJwa1ggXCt/56urhP+aJj5ElVy5LiD6MfdojMfAOW0mxLxEAzxkbmFtZVgeScHrM25oAX5RcBz3wPLlQBHvtETy32V8645MntE6ZW5vbmNlT3UrptEIGdt9l2U2Tl6UUWV2YWx1ZVhVBteIV2zkgZAxrbtMKGgJLdM7h/Fsr2y3pESVRrnhRGNSs+yk9MhiKS4SddDv/08JQHN4/2lng/3nYz7i83XGK9qict3Mv/yO1XEalK9suyadW93//w==
+      - name: SOURCE_CONTRACT_ADDRESS
+        value: pGJwa1ggJtMoxgXDkTQVDNxmN9gk3k8lj9UUenic76wYLA4dRkpkbmFtZVgnJM+w1p3KgsT52p1chfb66a6cJ2I/ZKiz7sn1Q/qksghXffef6kZSZW5vbmNlT822YDjbVx2af4XKq5sGPWV2YWx1ZVg6pFSro0GaF8P7+ihKrQfMw1JBYlW5A8LYJAhtJrkfqXQxvie4HaoTY21udNQ0Q3+7+mjt1dxtivAASw==

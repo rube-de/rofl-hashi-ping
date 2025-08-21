@@ -1,5 +1,9 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
+import "./tasks/deploy-block-header-requester";
+import * as dotenv from "dotenv";
+
+dotenv.config();
 
 const accounts = process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : {
   mnemonic: "test test test test test test test test test test test junk",

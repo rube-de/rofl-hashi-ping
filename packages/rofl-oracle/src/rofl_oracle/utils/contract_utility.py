@@ -5,7 +5,7 @@ from eth_account import Account
 from eth_account.signers.local import LocalAccount
 from sapphirepy import sapphire
 from web3 import Web3
-from web3.middleware import construct_sign_and_send_raw_middleware
+from web3.middleware import SignAndSendRawMiddlewareBuilder
 
 
 class ContractUtility:
@@ -39,7 +39,7 @@ class ContractUtility:
             else Web3.HTTPProvider(self.network)
         )
         w3 = Web3(provider)
-        w3.middleware_onion.add(construct_sign_and_send_raw_middleware(account))
+        w3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(account))
         w3 = sapphire.wrap(w3, account)
         w3.eth.default_account = account.address
         return w3
