@@ -1,10 +1,16 @@
 {
   "name": "hardhat-project",
+  "scripts": {
+    "postinstall": "patch-package"
+  },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^6.1.0",
-    "hardhat": "^2.26.2"
+    "hardhat": "^2.26.2",
+    "patch-package": "^8.0.0"
   },
   "dependencies": {
+    "@eth-optimism/contracts-bedrock": "^0.17.3",
+    "@oasisprotocol/sapphire-contracts": "^0.2.14",
     "dotenv": "^17.2.1"
   }
 }
