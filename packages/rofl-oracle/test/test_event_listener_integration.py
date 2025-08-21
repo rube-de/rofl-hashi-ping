@@ -40,7 +40,7 @@ BLOCK_REQUESTER_ABI = [{
     ],
     "name": "BlockHeaderRequested",
     "type": "event"
-}]s
+}]
 
 
 class TestEventListenerIntegration:
