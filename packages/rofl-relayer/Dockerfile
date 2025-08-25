@@ -22,6 +22,7 @@ RUN uv sync --frozen
 # Copy source code
 COPY main.py ./
 COPY src/ ./src/
+COPY contracts/ ./contracts/
 
-# Run the oracle
+# Run the relayer
 ENTRYPOINT ["uv", "run", "python", "main.py"]

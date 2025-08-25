@@ -15,6 +15,7 @@ dev = [
     "ruff>=0.12.8",
     "pytest",
     "pytest-asyncio",
+    "python-dotenv>=1.1.1",
 ]
 
 [build-system]
@@ -102,13 +103,6 @@ skip-magic-trailing-comma = false
 
 # Like Black, automatically detect the appropriate line ending.
 line-ending = "auto"
-
-[dependency-groups]
-dev = [
-    "pytest>=8.4.1",
-    "pytest-asyncio>=1.1.0",
-    "ruff>=0.12.8",
-]
 
 [tool.ruff.lint.isort]
 known-first-party = ["rofl_relayer"]

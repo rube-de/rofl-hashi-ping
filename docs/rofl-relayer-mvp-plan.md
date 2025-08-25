@@ -84,16 +84,18 @@ This document outlines the MVP (Minimum Viable Product) implementation plan for 
 
 ### 1. Source Chain Components (Ethereum Sepolia)
 
-#### 1.1 PingSender Contract (NEW)
+#### 1.1 PingSender Contract ✅ **IMPLEMENTED**
 **Location**: `packages/ping/contracts/PingSender.sol`
+
+**Status**: ✅ **Fully implemented and tested**
 
 **Purpose**: Emit simple ping events that can be proven on other chains
 
 **Key Features (MVP)**:
-- Emit simple `Ping` events with minimal data
-- Automatically request block headers via `BlockHeaderRequester`
-- Generate unique ping IDs for replay protection
-- No complex message data - just proof of occurrence
+- ✅ Emit simple `Ping` events with minimal data
+- ✅ Automatically request block headers via `BlockHeaderRequester`
+- ✅ Generate unique ping IDs for replay protection
+- ✅ No complex message data - just proof of occurrence
 
 **Contract Interface**:
 ```solidity
@@ -114,18 +116,20 @@ contract PingSender {
 }
 ```
 
-#### 1.2 BlockHeaderRequester Contract (EXISTING)
+#### 1.2 BlockHeaderRequester Contract ✅ **IMPLEMENTED**
 **Location**: `packages/ping/contracts/BlockHeaderRequester.sol`
 
-**Status**: ✅ Already implemented
-**Integration**: PingSender will interact with this contract to request headers
+**Status**: ✅ **Fully implemented and tested**
+**Integration**: ✅ PingSender successfully integrated and requests headers automatically
 
 ### 2. ROFL Components (Oasis Network)
 
-#### 2.1 ROFL Ping Relayer Service (NEW)
-**Location**: `packages/rofl-relayer/src/rofl-relayer/ping_relayer.py`
+#### 2.1 ROFL Ping Relayer Service 🚧 **IN DEVELOPMENT**
+**Location**: `packages/rofl-relayer/main.py`
 
 **Purpose**: Monitor ping events and generate proofs for verification on target chain
+
+**Implementation Plan**: See [rofl-relayer-impl-plan.md](./rofl-relayer-impl-plan.md)
 
 **Key Features (MVP)**:
 - **Real-time WebSocket event monitoring** using existing EventListenerUtility
@@ -147,16 +151,18 @@ class PingRelayer:
     def verify_ping_confirmation()      # Confirm ping was verified
 ```
 
-#### 2.2 ROFL Header Oracle (EXISTING)
+#### 2.2 ROFL Header Oracle ✅ **IMPLEMENTED**
 **Location**: `packages/rofl-oracle/src/rofl_oracle/header_oracle.py`
 
-**Status**: ✅ Already implemented
+**Status**: ✅ **Fully implemented and operational**
 **Integration**: Message relayer will coordinate with oracle for header availability
 
 ### 3. Target Chain Components (Oasis Sapphire)
 
-#### 3.1 PingReceiver Contract (NEW)
+#### 3.1 PingReceiver Contract ✅ **IMPLEMENTED**
 **Location**: `packages/ping/contracts/PingReceiver.sol`
+
+**Status**: ✅ **Fully implemented and tested**
 
 **Purpose**: Verify that ping events occurred on source chain
 
@@ -194,36 +200,36 @@ contract PingReceiver {
 }
 ```
 
-#### 3.2 ROFLAdapter Contract (EXISTING)
+#### 3.2 ROFLAdapter Contract ✅ **IMPLEMENTED**
 **Location**: `packages/hashi/packages/evm/contracts/adapters/oasis/ROFLAdapter.sol`
 
-**Status**: ✅ Already implemented
-**Integration**: PingReceiver will read block headers from this contract
+**Status**: ✅ **Fully implemented and integrated**
+**Integration**: ✅ PingReceiver successfully reads block headers from this contract
 
-#### 3.3 Hashi Verification Infrastructure (EXISTING)
+#### 3.3 Hashi Verification Infrastructure ✅ **IMPLEMENTED**
 **Location**: `packages/hashi/packages/evm/contracts/prover/`
 
-**Status**: ✅ Already implemented
-**Integration**: PingReceiver will use HashiProver for Merkle proof verification
+**Status**: ✅ **Fully implemented and integrated**
+**Integration**: ✅ PingReceiver successfully uses HashiProver for Merkle proof verification
 
 ## Implementation Phases
 
-### Phase 1: Core Message Infrastructure (MVP)
+### Phase 1: Core Message Infrastructure ✅ **COMPLETED**
 
-#### Week 1: Contract Development
-1. **PingSender Contract Implementation**
-   - Basic ping message structure
-   - Event emission for message tracking
-   - Integration with BlockHeaderRequester
-   - Unit tests and deployment scripts
+#### Contract Development ✅ **DONE**
+1. **PingSender Contract** ✅
+   - ✅ Basic ping message structure
+   - ✅ Event emission for message tracking
+   - ✅ Integration with BlockHeaderRequester
+   - ✅ Unit tests and deployment scripts
 
-2. **PingReceiver Contract Implementation**
-   - Message verification using Hashi infrastructure
-   - Basic message processing
-   - Event emission for confirmations
-   - Simple validation (no advanced access controls for MVP)
+2. **PingReceiver Contract** ✅
+   - ✅ Message verification using Hashi infrastructure
+   - ✅ Basic message processing
+   - ✅ Event emission for confirmations
+   - ✅ Simple validation (no advanced access controls for MVP)
 
-#### Week 2: ROFL Relayer Service
+#### ROFL Relayer Service 🚧 **IN PROGRESS**
 1. **Event Monitoring Setup**
    - Initialize EventListenerUtility with WebSocket support
    - Real-time PingMessage event monitoring (<1 second latency)
@@ -273,6 +279,15 @@ contract PingReceiver {
 
 ## Technical Implementation Details
 
+### Testing Tools ✅ **AVAILABLE**
+
+The following TypeScript tasks are implemented and tested for manual operation:
+- `send-ping` - Send a ping event on source chain
+- `generate-proof` - Generate Merkle proof for a transaction
+- `relay-message` - Submit proof to target chain
+- `check-ping` - Verify ping was received on target chain
+- `post-blockhash` - Manually post block hash to mock oracle (for testing)
+
 ### Ping ID Generation
 ```solidity
 function generatePingId(
@@ -298,10 +313,17 @@ function generatePingId(
 }
 ```
 
+### Utility Classes ✅ **AVAILABLE**
+
+The following utility classes are already implemented and can be reused:
+- `EventListenerUtility` - WebSocket event monitoring with auto-reconnection
+- `ContractUtility` - Web3 contract interaction for Sapphire
+- `RoflUtility` - ROFL transaction submission
+
 ### Event Monitoring Architecture
 ```python
 # Use existing EventListenerUtility for WebSocket-based event listening
-from rofl_oracle.utils.event_listener_utility import EventListenerUtility
+from rofl_relayer.utils.event_listener_utility import EventListenerUtility
 
 class PingRelayer:
     def __init__(self, source_rpc_url: str):

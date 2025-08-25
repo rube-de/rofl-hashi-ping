@@ -44,18 +44,15 @@ class ContractUtility:
         w3.eth.default_account = account.address
         return w3
 
-    def get_contract(self, contract_name: str) -> tuple[str, str]:
+    def get_contract_abi(self, contract_name: str) -> list:
         """Fetches ABI of the given contract from the contracts folder"""
-        output_path = (
-            Path(__file__).parent.parent.parent
+        contract_path = (
+            Path(__file__).parent.parent.parent.parent
             / "contracts"
-            / "out"
-            / f"{contract_name}.sol"
             / f"{contract_name}.json"
         ).resolve()
-        contract_data = ""
-        with output_path.open() as file:
+        
+        with contract_path.open() as file:
             contract_data = json.load(file)
 
-        abi, bytecode = contract_data["abi"], contract_data["bytecode"]["object"]
-        return abi, bytecode
+        return contract_data["abi"]
