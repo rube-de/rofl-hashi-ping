@@ -2,7 +2,12 @@
 
 import argparse
 import asyncio
+import logging
+import sys
 from src.rofl_relayer.relayer import ROFLRelayer
+
+# Set up root logger
+logger = logging.getLogger(__name__)
 
 
 async def main():
@@ -17,14 +22,30 @@ async def main():
     )
     args = parser.parse_args()
     
-    if args.local:
-        print("Running in LOCAL MODE")
-    else:
-        print("Running in ROFL MODE")
+    logger.info(f"Starting in {'LOCAL' if args.local else 'ROFL'} mode")
     
-    # Create and run relayer
-    relayer = ROFLRelayer(local_mode=args.local)
-    await relayer.run()
+    try:
+        # Create relayer using factory method
+        relayer = ROFLRelayer.from_env(local_mode=args.local)
+        await relayer.run()
+    except ValueError as e:
+        logger.error(f"Configuration error: {e}")
+        logger.error("Required environment variables:")
+        logger.error("  - SOURCE_RPC_URL: Source chain RPC endpoint (e.g., Ethereum)")
+        logger.error("  - TARGET_RPC_URL: Target chain RPC endpoint (e.g., Sapphire)")
+        logger.error("  - PING_SENDER_ADDRESS: PingSender contract address")
+        logger.error("  - PING_RECEIVER_ADDRESS: PingReceiver contract address")
+        logger.error("  - ROFL_ADAPTER_ADDRESS: ROFLAdapter contract address")
+        if args.local:
+            logger.error("  - PRIVATE_KEY: Private key for signing transactions")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        logger.info("Received interrupt signal, shutting down...")
+        if 'relayer' in locals():
+            relayer.stop()
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}", exc_info=True)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

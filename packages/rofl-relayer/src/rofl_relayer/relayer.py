@@ -1,82 +1,86 @@
 """
 ROFL Relayer implementation.
 
-This module contains the main relayer service that monitors Ping events
-on Ethereum and relays them to Oasis Sapphire using cryptographic proofs.
+This module contains the main relayer service that orchestrates event monitoring
+and coordinates with the event processor for handling blockchain events.
 """
 
 import asyncio
-import sys
-from typing import Any, Dict, Set
+import logging
+from typing import Optional
 
-from web3 import Web3
 from web3.types import EventData
 
 from .config import RelayerConfig
+from .event_processor import EventProcessor
 from .utils.polling_event_listener import PollingEventListener
 from .utils.contract_utility import ContractUtility
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 
 class ROFLRelayer:
-    """Main relayer service class."""
+    """
+    Main relayer service that orchestrates event monitoring and processing.
+    
+    This class focuses on coordination and lifecycle management, delegating
+    event processing logic to the EventProcessor.
+    """
+    
+    STATUS_LOG_INTERVAL = 30  # seconds
 
-    def __init__(self, local_mode: bool = False):
+    def __init__(self, config: RelayerConfig):
         """
         Initialize the ROFL Relayer.
 
         Args:
-            local_mode: Run in local mode without ROFL utilities
+            config: Relayer configuration
         """
-        self.local_mode = local_mode
+        self.config = config
+        self.local_mode = config.local_mode
         self.running = False
         
-        # Load configuration
-        try:
-            print("\nLoading configuration...")
-            self.config = RelayerConfig.from_env(local_mode=local_mode)
-            self.config.log_config()
-        except ValueError as e:
-            print(f"\nConfiguration Error: {e}")
-            print("\nRequired environment variables:")
-            print("  - SOURCE_RPC_URL: Ethereum RPC endpoint")
-            print("  - PING_SENDER_ADDRESS: PingSender contract address")
-            print("  - PING_RECEIVER_ADDRESS: PingReceiver contract address")
-            print("  - ROFL_ADAPTER_ADDRESS: ROFLAdapter contract address")
-            if local_mode:
-                print("  - PRIVATE_KEY: Private key for signing transactions")
-            sys.exit(1)
+        # Initialize components
+        self.event_processor = EventProcessor()
+        self.ping_listener: Optional[PollingEventListener] = None
+        self.hash_listener: Optional[PollingEventListener] = None
         
-        # Initialize polling listeners (will be set in init_event_monitoring)
-        self.ping_listener: PollingEventListener | None = None
-        self.hash_listener: PollingEventListener | None = None
+        # Async coordination
+        self.shutdown_event = asyncio.Event()
+    
+    @classmethod
+    def from_env(cls, local_mode: bool = False) -> "ROFLRelayer":
+        """
+        Create a ROFLRelayer instance from environment variables.
         
-        # State tracking
-        self.processed_tx_hashes: Set[str] = set()
-        self.pending_pings: list[Dict[str, Any]] = []
-        self.stored_hashes: Dict[int, str] = {}  # block_number -> block_hash
+        Args:
+            local_mode: Run in local mode without ROFL utilities
+            
+        Returns:
+            Configured ROFLRelayer instance
+            
+        Raises:
+            ValueError: If required environment variables are missing
+        """
+        config = RelayerConfig.from_env(local_mode=local_mode)
+        config.log_config()
+        return cls(config)
     
     async def init_event_monitoring(self) -> None:
         """Initialize polling listeners for both chains."""
-        print("\nInitializing event monitoring...")
+        logger.info("Initializing event monitoring...")
         
-        # Use ContractUtility in ABI-only mode (no network/secret needed)
+        # Use ContractUtility for loading ABIs
         contract_util = ContractUtility()
         
-        # Load PingSender ABI
+        # Load contract ABIs
         ping_sender_abi = contract_util.get_contract_abi("PingSender")
-        
-        # ROFLAdapter uses a simple ABI for HashStored event
-        rofl_adapter_abi = [
-            {
-                "anonymous": False,
-                "inputs": [
-                    {"indexed": True, "name": "id", "type": "uint256"},
-                    {"indexed": True, "name": "hash", "type": "bytes32"}
-                ],
-                "name": "HashStored",
-                "type": "event"
-            }
-        ]
+        rofl_adapter_abi = contract_util.get_contract_abi("ROFLAdapter")
         
         # Initialize PingSender event listener (source chain)
         self.ping_listener = PollingEventListener(
@@ -87,176 +91,115 @@ class ROFLRelayer:
             lookback_blocks=self.config.monitoring.lookback_blocks
         )
         
-        # Initialize ROFLAdapter event listener (target chain)
-        # For MVP, we'll use the same RPC for testing, but in production this would be Sapphire
+        # Initialize ROFLAdapter event listener (target chain - Sapphire)
         self.hash_listener = PollingEventListener(
-            rpc_url=self.config.source_chain.rpc_url,  # TODO: Use target chain RPC
+            rpc_url=self.config.target_chain.rpc_url,
             contract_address=self.config.target_chain.rofl_adapter_address,
             event_name="HashStored", 
             abi=rofl_adapter_abi,
             lookback_blocks=self.config.monitoring.lookback_blocks
         )
         
-        print(f"Initialized PingSender listener at {self.config.source_chain.ping_sender_address}")
-        print(f"Initialized ROFLAdapter listener at {self.config.target_chain.rofl_adapter_address}")
+        logger.info(f"PingSender listener: {self.config.source_chain.ping_sender_address}")
+        logger.info(f"ROFLAdapter listener: {self.config.target_chain.rofl_adapter_address}")
     
-    async def process_ping_event(self, event: EventData) -> None:
-        """
-        Process Ping events from the source chain.
-        
-        Args:
-            event: The Ping event data
-        """
-        try:
-            # Extract transaction hash
-            tx_hash = event.get('transactionHash')
-            if not tx_hash:
-                print("Warning: Event missing transaction hash")
-                return
-            
-            # Convert to hex string if needed
-            if isinstance(tx_hash, bytes):
-                tx_hash = tx_hash.hex()
-            
-            # Check if already processed
-            if tx_hash in self.processed_tx_hashes:
-                return  # Skip duplicate
-            
-            # Mark as processed
-            self.processed_tx_hashes.add(tx_hash)
-            
-            # Extract event data
-            block_number = event.get('blockNumber', 0)
-            log_index = event.get('logIndex', 0)
-            
-            # Decode event arguments (for Ping event)
-            # Event signature: Ping(address indexed sender, uint256 indexed timestamp, uint256 blockNumber)
-            args = event.get('args', {})
-            sender = args.get('sender', '0x0')
-            timestamp = args.get('timestamp', 0)
-            
-            # Generate ping ID (matches contract logic)
-            # For now, use a simple hash of the event data
-            ping_id = Web3.keccak(text=f"{tx_hash}-{log_index}")
-            
-            # Create ping record
-            ping_event = {
-                'tx_hash': tx_hash,
-                'block_number': block_number,
-                'log_index': log_index,
-                'sender': sender,
-                'timestamp': timestamp,
-                'ping_id': ping_id.hex(),
-            }
-            
-            # Log event
-            print(f"\n{'='*60}")
-            print(f"Ping Event Detected!")
-            print(f"  TX: {tx_hash[:10]}...")
-            print(f"  Block: {block_number}")
-            print(f"  Sender: {sender}")
-            print(f"  Timestamp: {timestamp}")
-            print(f"  Ping ID: {ping_id.hex()[:10]}...")
-            print(f"{'='*60}\n")
-            
-            # Queue for processing
-            self.pending_pings.append(ping_event)
-            
-            # TODO: Phase 3 - Generate Merkle proof
-            # TODO: Phase 4 - Wait for header availability
-            # TODO: Phase 5 - Submit proof to target chain
-            
-        except Exception as e:
-            print(f"Error processing ping event: {e}")
-            import traceback
-            traceback.print_exc()
     
-    async def process_hash_stored(self, event: EventData) -> None:
-        """
-        Process HashStored events from the ROFLAdapter on target chain.
+    async def _periodic_status_logger(self) -> None:
+        """Log status periodically while running."""
+        while self.running:
+            await asyncio.sleep(self.STATUS_LOG_INTERVAL)
+            stats = self.event_processor.get_stats()
+            if stats['pending_pings'] > 0:
+                logger.info(
+                    f"Status: {stats['pending_pings']} pings pending, "
+                    f"{stats['processed_hashes']} processed, "
+                    f"{stats['stored_hashes']} hashes stored"
+                )
+    
+    async def _check_task_health(self, tasks: dict[str, asyncio.Task]) -> bool:
+        """Check if any critical task has failed."""
+        for name, task in tasks.items():
+            if task.done() and name != "status":  # status task can end normally
+                try:
+                    await task
+                except Exception as e:
+                    logger.error(f"{name} task failed: {e}", exc_info=True)
+                return False
+        return True
+    
+    async def _cleanup_tasks(self, tasks: dict[str, asyncio.Task]) -> None:
+        """Clean up all tasks and listeners."""
+        # Stop polling listeners
+        if self.ping_listener:
+            await self.ping_listener.stop()
+        if self.hash_listener:
+            await self.hash_listener.stop()
         
-        Args:
-            event: The HashStored event data
-        """
-        try:
-            # Extract event data
-            args = event.get('args', {})
-            block_id = args.get('id', 0)
-            block_hash = args.get('hash', '0x0')
-            
-            if isinstance(block_hash, bytes):
-                block_hash = block_hash.hex()
-            
-            # Store the hash
-            self.stored_hashes[block_id] = block_hash
-            
-            print(f"Hash Stored: Block {block_id} -> {block_hash[:10]}...")
-            
-            # Check if any pending pings can now be processed
-            for ping in self.pending_pings:
-                if ping['block_number'] == block_id:
-                    print(f"Header available for ping {ping['ping_id'][:10]}...")
-                    # TODO: Phase 3 - Generate and submit proof
-            
-        except Exception as e:
-            print(f"Error processing HashStored event: {e}")
+        # Cancel all running tasks
+        for name, task in tasks.items():
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass  # Expected when cancelling
     
     async def run(self) -> None:
         """Main event loop for the relayer service."""
         self.running = True
-        print("\nROFL Relayer Started")
-        print("="*60)
-
+        logger.info("ROFL Relayer starting...")
+        logger.info(f"Polling interval: {self.config.monitoring.polling_interval}s")
+        logger.info(f"Lookback blocks: {self.config.monitoring.lookback_blocks}")
+        
+        tasks = {}
         try:
-            # Initialize event monitoring
             await self.init_event_monitoring()
             
-            # Start polling listeners in background tasks
-            ping_task = asyncio.create_task(
-                self.ping_listener.start_polling(
-                    callback=self.process_ping_event,
-                    interval=self.config.monitoring.polling_interval
-                )
-            )
+            # Ensure listeners are initialized
+            if not self.ping_listener or not self.hash_listener:
+                raise RuntimeError("Event listeners not properly initialized")
             
-            hash_task = asyncio.create_task(
-                self.hash_listener.start_polling(
-                    callback=self.process_hash_stored,
-                    interval=self.config.monitoring.polling_interval
-                )
-            )
+            # Start all async tasks inline - clear what's being monitored
+            tasks = {
+                "ping": asyncio.create_task(
+                    self.ping_listener.start_polling(
+                        callback=self.event_processor.process_ping_event,
+                        interval=self.config.monitoring.polling_interval
+                    )
+                ),
+                "hash": asyncio.create_task(
+                    self.hash_listener.start_polling(
+                        callback=self.event_processor.process_hash_stored,
+                        interval=self.config.monitoring.polling_interval
+                    )
+                ),
+                "status": asyncio.create_task(self._periodic_status_logger())
+            }
             
-            print(f"Polling interval: {self.config.monitoring.polling_interval} seconds")
-            print(f"Lookback blocks: {self.config.monitoring.lookback_blocks}")
-            print("="*60)
-            print("\nWaiting for events...\n")
+            logger.info("Event monitoring started, waiting for events...")
             
-            # Main processing loop
+            # Wait until shutdown or task failure
             while self.running:
-                # Process pending pings
-                if self.pending_pings:
-                    print(f"Pending pings in queue: {len(self.pending_pings)}")
+                # Check for shutdown signal
+                try:
+                    await asyncio.wait_for(self.shutdown_event.wait(), timeout=1.0)
+                    break  # Shutdown requested
+                except asyncio.TimeoutError:
+                    pass  # Continue running
                 
-                # Log status periodically
-                await asyncio.sleep(10)
-                
-                # Check if tasks are still running
-                if ping_task.done() or hash_task.done():
-                    print("Warning: A polling task has stopped unexpectedly")
+                # Check task health
+                if not await self._check_task_health(tasks):
+                    logger.error("Critical task failure, shutting down")
                     break
-
+        
         except Exception as e:
-            print(f"\nError in main loop: {e}")
+            logger.error(f"Error in main loop: {e}", exc_info=True)
             raise
         finally:
-            # Stop polling listeners
-            if self.ping_listener:
-                await self.ping_listener.stop()
-            if self.hash_listener:
-                await self.hash_listener.stop()
-            
-            print("\nROFL Relayer Stopped")
+            await self._cleanup_tasks(tasks)
+            logger.info("ROFL Relayer stopped")
 
     def stop(self) -> None:
         """Stop the relayer service."""
         self.running = False
+        self.shutdown_event.set()

@@ -17,41 +17,29 @@ class ContractUtility:
     2. ABI-only mode: Initialize with empty strings to just load ABIs
     """
 
-    def __init__(self, network_name: str = "", secret: str = ""):
+    def __init__(self, rpc_url: str = "", secret: str = ""):
         """
         Initialize the ContractUtility.
         
         Args:
-            network_name: Name of the network to connect to (optional for ABI-only mode)
+            rpc_url: RPC URL for the network (optional for ABI-only mode)
             secret: Private key for transactions (optional for ABI-only mode)
         """
-        if network_name and secret:
+        if rpc_url and secret:
             # Full initialization for contract interaction
-            networks = {
-                "sapphire": "https://sapphire.oasis.io",
-                "sapphire-testnet": "https://testnet.sapphire.oasis.io",
-                "sapphire-localnet": "http://localhost:8545",
-            }
-            self.network = networks.get(network_name, network_name)
+            self.rpc_url = rpc_url
             self.w3 = self.setup_web3_middleware(secret)
         else:
             # ABI-only mode - no network connection needed
-            self.network = None
+            self.rpc_url = None
             self.w3 = None
 
     def setup_web3_middleware(self, secret: str) -> Web3:
-        if not all([secret]):
-            raise Warning(
-                "Missing required environment variables. Please set PRIVATE_KEY."
-            )
+        if not secret:
+            raise ValueError("Private key is required for contract interaction")
 
         account: LocalAccount = Account.from_key(secret)
-        provider = (
-            Web3.WebsocketProvider(self.network)
-            if self.network.startswith("ws:")
-            else Web3.HTTPProvider(self.network)
-        )
-        w3 = Web3(provider)
+        w3 = Web3(Web3.HTTPProvider(self.rpc_url))
         w3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(account))
         w3 = sapphire.wrap(w3, account)
         w3.eth.default_account = account.address

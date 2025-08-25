@@ -19,10 +19,10 @@ class SourceChainConfig:
 @dataclass
 class TargetChainConfig:
     """Configuration for the target chain (Oasis Sapphire)."""
+    rpc_url: str
     ping_receiver_address: str
     rofl_adapter_address: str
     private_key: str
-    network: str = "sapphire-testnet"  # Default to testnet
 
 
 @dataclass
@@ -72,7 +72,12 @@ class RelayerConfig:
             )
 
         # Target chain configuration
-        target_network = os.environ.get("TARGET_NETWORK", "sapphire-testnet")
+        target_rpc_url = os.environ.get("TARGET_RPC_URL")
+        if not target_rpc_url:
+            raise ValueError(
+                "TARGET_RPC_URL environment variable is required. "
+                "Example: https://testnet.sapphire.oasis.io"
+            )
 
         ping_receiver_address = os.environ.get("PING_RECEIVER_ADDRESS")
         if not ping_receiver_address:
@@ -109,10 +114,10 @@ class RelayerConfig:
         )
 
         target_chain = TargetChainConfig(
+            rpc_url=target_rpc_url,
             ping_receiver_address=ping_receiver_address,
             rofl_adapter_address=rofl_adapter_address,
             private_key=private_key,
-            network=target_network,
         )
 
         return cls(
@@ -132,7 +137,7 @@ class RelayerConfig:
         print(f"  PingSender: {self.source_chain.ping_sender_address}")
 
         print("\n[Target Chain]")
-        print(f"  Network: {self.target_chain.network}")
+        print(f"  RPC URL: {self.target_chain.rpc_url}")
         print(f"  PingReceiver: {self.target_chain.ping_receiver_address}")
         print(f"  ROFLAdapter: {self.target_chain.rofl_adapter_address}")
         print(f"  Private Key: {'[SET]' if self.target_chain.private_key else '[NOT SET]'}")

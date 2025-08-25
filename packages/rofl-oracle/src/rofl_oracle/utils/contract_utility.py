@@ -33,11 +33,7 @@ class ContractUtility:
             )
 
         account: LocalAccount = Account.from_key(secret)
-        provider = (
-            Web3.WebsocketProvider(self.network)
-            if self.network.startswith("ws:")
-            else Web3.HTTPProvider(self.network)
-        )
+        provider = Web3.HTTPProvider(self.network)
         w3 = Web3(provider)
         w3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(account))
         w3 = sapphire.wrap(w3, account)
