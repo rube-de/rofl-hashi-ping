@@ -13,10 +13,11 @@ Minimal implementation of an automated ROFL relayer that monitors Ping events on
 ## Quick Start Development Path
 Since environment and contracts are ready:
 1. ✅ **Phase 1**: Configuration and project structure - COMPLETED
-2. **Phase 2**: Event monitoring using existing utilities - NEXT
-3. **Phase 3**: Port proof generation from TypeScript
-4. **Phase 5**: Submit proofs using ROFL utilities
-5. **Phase 8.3**: End-to-end testing with deployed contracts
+2. ✅ **Phase 2**: Event monitoring using polling - COMPLETED
+3. **Phase 3**: Port proof generation from TypeScript - NEXT
+4. **Phase 4**: Header coordination with ROFLAdapter
+5. **Phase 5**: Submit proofs using ROFL utilities
+6. **Phase 8.3**: End-to-end testing with deployed contracts
 
 ## Required Environment Variables (Simplified)
 Core environment variables needed:
@@ -30,13 +31,15 @@ Core environment variables needed:
 - ✅ Python environment already set up in `packages/rofl-relayer/`
 - ✅ TypeScript tasks tested and working (send-ping, generate-proof, relay-message)
 - ✅ Contracts deployed:
-  - **Ethereum Sepolia**: PingSender, BlockHeaderRequester
-  - **Sapphire Testnet**: PingReceiver
-  - **Base Sepolia**: BlockHeaderRequester (alternative)
-- ✅ Utility classes already copied to `packages/rofl-relayer/src/rofl-relayer/utils/`
-  - EventListenerUtility (WebSocket monitoring)
-  - ContractUtility (Sapphire interaction) - **Updated** to use simple `contracts/` structure
+  - **Ethereum Sepolia**: PingSender (0xDCC23A03E6b6aA254cA5B0be942dD5CafC9A2299)
+  - **Sapphire Testnet**: PingReceiver (0x1f54b7AF3A462aABed01D5910a3e5911e76D4B51)
+  - **ROFLAdapter**: 0x9f983F759d511D0f404582b0bdc1994edb5db856
+- ✅ Utility classes implemented and working:
+  - PollingEventListener (Polling-based event monitoring) - **NEW**
+  - EventListenerUtility (WebSocket monitoring - for future use)
+  - ContractUtility (ABI loading and Sapphire interaction)
   - RoflUtility (ROFL transaction submission)
+- ✅ Event monitoring successfully detecting real blockchain events
 
 ## Phase 1: Configuration Setup ✅ COMPLETED
 
@@ -67,27 +70,28 @@ Core environment variables needed:
 - [x] Minimal validation - only address checksumming
 - [x] Removed BlockHeaderRequester - not needed by relayer (oracle's responsibility)
 
-## Phase 2: Event Monitoring
+## Phase 2: Event Monitoring ✅ COMPLETED
 
-### 2.1 WebSocket Event Listener
-- [ ] Import EventListenerUtility from `rofl_relayer.utils.event_listener_utility`
-- [ ] Initialize with Ethereum Sepolia RPC URL
-- [ ] Load PingSender ABI using `contract_util.get_contract_abi('PingSender')`
-- [ ] Create contract instance using Web3 with address from env vars
-- [ ] Implement async callback for Ping event processing
-- [ ] Add connection state tracking and logging
+### 2.1 Polling-Based Event Listener ✅ COMPLETED
+- [x] Created PollingEventListener utility class in `rofl_relayer.utils.polling_event_listener`
+- [x] Initialize with Ethereum Sepolia RPC URL
+- [x] Load PingSender ABI using `contract_util.get_contract_abi('PingSender')`
+- [x] Create contract instance using Web3 with address from env vars
+- [x] Implement async callback for Ping event processing
+- [x] Add connection state tracking and logging
+- [x] Successfully tested with real blockchain events (Block 9061255, TX 0x3794cbba...)
 
-### 2.2 Fallback Polling Mechanism
-- [ ] Implement eth_getLogs based polling as fallback
-- [ ] Track last processed block number
-- [ ] Add configurable polling interval (default 30 seconds)
-- [ ] Implement automatic switch from WebSocket to polling on connection failure
+### 2.2 Polling Mechanism ✅ COMPLETED
+- [x] Implement eth_getLogs based polling (primary approach, not fallback)
+- [x] Track last processed block number
+- [x] Add configurable polling interval (default 30 seconds)
+- [x] Initial sync with 100 block lookback
 
-### 2.3 Event Processing Pipeline
-- [ ] Create event queue for processing
-- [ ] Extract ping details (sender, block number) from event data
-- [ ] Generate ping ID using same logic as contracts
-- [ ] Track processed transaction hashes to prevent duplicates
+### 2.3 Event Processing Pipeline ✅ COMPLETED
+- [x] Create event queue for processing (pending_pings list)
+- [x] Extract ping details (sender, block number) from event data
+- [x] Generate ping ID using Web3.keccak
+- [x] Track processed transaction hashes to prevent duplicates
 
 ## Phase 3: Merkle Proof Generation
 

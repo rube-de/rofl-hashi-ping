@@ -62,6 +62,21 @@ PRIVATE_KEY=0x... \
 uv run python main.py --local
 ```
 
+## Testing
+
+Run the test suite to verify the relayer functionality:
+
+```bash
+# Run tests
+cd tests
+uv run python test_relayer.py
+```
+
+The test suite validates:
+- PollingEventListener utility class structure
+- ROFL Relayer initialization and event monitoring
+- Integration with deployed contracts on Ethereum Sepolia
+
 ## Architecture
 
 ```
@@ -72,7 +87,10 @@ src/rofl_relayer/
   utils/                     # Utility modules
     contract_utility.py      # Contract interactions
     event_listener_utility.py # WebSocket event monitoring
+    polling_event_listener.py # Polling-based event monitoring
     rofl_utility.py          # ROFL transaction submission
+tests/
+  test_relayer.py           # Test suite for relayer functionality
 ```
 
 ## Monitoring
