@@ -1,8 +1,9 @@
 import { task } from "hardhat/config";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import "hardhat-switch-network";
+import { saveDeploymentInfo } from "../utils/save-deployment";
 
-task("deploy-ping-cross-chain", "Deploy ping system across source and target chains")
+task("deploy:ping-cross-chain", "Deploy ping system across source and target chains")
   .addOptionalParam("sourceNetwork", "Source network for PingSender", "eth-sepolia")
   .addOptionalParam("targetNetwork", "Target network for PingReceiver", "sapphire-testnet")
   .addParam("shoyuBashi", "Address of ShoyuBashi contract on target chain")
@@ -44,6 +45,17 @@ task("deploy-ping-cross-chain", "Deploy ping system across source and target cha
       await blockHeaderRequester.waitForDeployment();
       blockHeaderRequesterAddress = await blockHeaderRequester.getAddress();
       console.log("  BlockHeaderRequester deployed to:", blockHeaderRequesterAddress);
+      
+      // Save BlockHeaderRequester deployment
+      await saveDeploymentInfo(
+        "BlockHeaderRequester",
+        blockHeaderRequesterAddress,
+        hre,
+        {
+          transactionHash: blockHeaderRequester.deploymentTransaction()?.hash,
+          constructorArgs: []
+        }
+      );
     } else {
       console.log("Using existing BlockHeaderRequester:", blockHeaderRequesterAddress);
       const code = await sourceEthers.provider.getCode(blockHeaderRequesterAddress);
@@ -63,6 +75,19 @@ task("deploy-ping-cross-chain", "Deploy ping system across source and target cha
     await pingSender.waitForDeployment();
     pingSenderAddress = await pingSender.getAddress();
     console.log("  PingSender deployed to:", pingSenderAddress);
+    
+    // Save PingSender deployment
+    await saveDeploymentInfo(
+      "PingSender",
+      pingSenderAddress,
+      hre,
+      {
+        transactionHash: pingSender.deploymentTransaction()?.hash,
+        constructorArgs: [blockHeaderRequesterAddress, sourceChainId.toString()],
+        blockHeaderRequester: blockHeaderRequesterAddress,
+        sourceChainId: sourceChainId.toString()
+      }
+    );
     
     // Verify PingSender deployment
     const deployedBlockHeaderRequester = await pingSender.blockHeaderRequester();
@@ -105,6 +130,18 @@ task("deploy-ping-cross-chain", "Deploy ping system across source and target cha
     await pingReceiver.waitForDeployment();
     pingReceiverAddress = await pingReceiver.getAddress();
     console.log("  PingReceiver deployed to:", pingReceiverAddress);
+    
+    // Save PingReceiver deployment
+    await saveDeploymentInfo(
+      "PingReceiver",
+      pingReceiverAddress,
+      hre,
+      {
+        transactionHash: pingReceiver.deploymentTransaction()?.hash,
+        constructorArgs: [taskArgs.shoyuBashi],
+        shoyuBashi: taskArgs.shoyuBashi
+      }
+    );
     
     // Verify PingReceiver deployment
     const deployedShoyuBashi = await pingReceiver.SHOYU_BASHI();

@@ -1,7 +1,8 @@
 import { task } from "hardhat/config";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
+import { saveDeploymentInfo } from "../utils/save-deployment";
 
-task("deploy-ping-sender", "Deploy PingSender contract")
+task("deploy:ping-sender", "Deploy PingSender contract")
   .addParam("blockHeaderRequester", "Address of BlockHeaderRequester contract")
   .addOptionalParam("sourceChainId", "Source chain ID (defaults to network chain ID)")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
@@ -62,18 +63,26 @@ task("deploy-ping-sender", "Deploy PingSender contract")
     }
     
     // Save deployment info
-    const deploymentInfo = {
+    await saveDeploymentInfo(
+      "PingSender",
+      pingSenderAddress,
+      hre,
+      {
+        transactionHash: pingSender.deploymentTransaction()?.hash,
+        constructorArgs: [blockHeaderRequesterAddress, sourceChainId.toString()],
+        blockHeaderRequester: blockHeaderRequesterAddress,
+        sourceChainId: sourceChainId.toString()
+      }
+    );
+    
+    console.log("\nDeployment Summary:");
+    console.log({
       network: hre.network.name,
       pingSender: pingSenderAddress,
       blockHeaderRequester: blockHeaderRequesterAddress,
       sourceChainId: sourceChainId.toString(),
-      deployer: deployer.address,
-      timestamp: new Date().toISOString(),
-      transactionHash: pingSender.deploymentTransaction()?.hash
-    };
-    
-    console.log("\nDeployment Summary:");
-    console.log(JSON.stringify(deploymentInfo, null, 2));
+      deployer: deployer.address
+    });
     
     return pingSenderAddress;
   });

@@ -56,6 +56,12 @@ const config: HardhatUserConfig = {
     }
   },
   solidity: "0.8.28",
+  sourcify: {
+    enabled: true
+  },
+  etherscan: {
+    enabled: false
+  }
 };
 
 export default config;

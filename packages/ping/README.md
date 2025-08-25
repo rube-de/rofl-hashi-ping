@@ -1,6 +1,6 @@
-# Ping Package - Cross-Chain Event Verification
+# Cross-Chain Ping - Hashi Protocol Implementation
 
-Cross-chain ping system using Oasis ROFL and Hashi protocol. Proves events occurred on one chain and verifies them on another using cryptographic proofs.
+A cross-chain messaging system that proves events occurred on one chain and verifies them on another using cryptographic Merkle proofs and the Hashi protocol.
 
 ## Components
 
@@ -61,27 +61,27 @@ bun hardhat test
 export PRIVATE_KEY=your_private_key_here
 ```
 
-## Deploy
+## Task Usage Guide
+
+**📚 For complete deployment and usage instructions, see [examples/task-usage-guide.md](./examples/task-usage-guide.md)**
+
+The guide covers:
+- Contract deployment (both production and testing modes)
+- Sending cross-chain pings
+- Generating cryptographic proofs
+- Setting up oracles (when needed)
+- Relaying messages with verification
+- Status checking and troubleshooting
+
+### Quick Commands
 
 ```bash
-# Deploy across eth-sepolia -> sapphire-testnet
-bun hardhat deploy-ping-cross-chain --shoyu-bashi 0x...
-
-# Custom networks
-bun hardhat deploy-ping-cross-chain \
-  --source-network eth-sepolia \
-  --target-network base-sepolia \
-  --shoyu-bashi 0x...
-```
-
-## Usage
-
-```bash
-# Send ping
-bun hardhat send-ping --network eth-sepolia --sender 0x...
-
-# Check status
-bun hardhat check-ping --network sapphire-testnet --receiver 0x... --ping-id 0x...
+# Deploy contracts and send first ping - see full guide for details
+bunx hardhat deploy:ping-sender --network eth-sepolia --block-header-requester 0x...
+bunx hardhat deploy:ping-receiver --network sapphire-testnet --shoyu-bashi 0x35b6fCe2459fd5A741a4a96dbFF5C852f60Ebb8d
+bunx hardhat send-ping --network eth-sepolia --sender 0x...
+bunx hardhat generate-proof --network eth-sepolia --tx-hash 0x...
+bunx hardhat relay-message --network sapphire-testnet --receiver 0x... --proof proof.json
 ```
 
 ## Networks

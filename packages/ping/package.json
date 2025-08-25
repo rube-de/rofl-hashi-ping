@@ -15,6 +15,11 @@
   },
   "dependencies": {
     "@eth-optimism/contracts-bedrock": "^0.17.3",
+    "@ethereumjs/block": "^10.0.0",
+    "@ethereumjs/common": "^10.0.0",
+    "@ethereumjs/rlp": "^10.0.0",
+    "@ethereumjs/trie": "^6.2.1",
+    "@ethereumjs/util": "^10.0.0",
     "@oasisprotocol/sapphire-contracts": "^0.2.14",
     "dotenv": "^17.2.1"
   }

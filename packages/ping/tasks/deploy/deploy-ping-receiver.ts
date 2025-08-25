@@ -1,7 +1,8 @@
 import { task } from "hardhat/config";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
+import { saveDeploymentInfo } from "../utils/save-deployment";
 
-task("deploy-ping-receiver", "Deploy PingReceiver contract")
+task("deploy:ping-receiver", "Deploy PingReceiver contract")
   .addParam("shoyuBashi", "Address of ShoyuBashi contract")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;
@@ -54,17 +55,24 @@ task("deploy-ping-receiver", "Deploy PingReceiver contract")
     }
     
     // Save deployment info
-    const deploymentInfo = {
+    await saveDeploymentInfo(
+      "PingReceiver",
+      pingReceiverAddress,
+      hre,
+      {
+        transactionHash: pingReceiver.deploymentTransaction()?.hash,
+        constructorArgs: [shoyuBashiAddress],
+        shoyuBashi: shoyuBashiAddress
+      }
+    );
+    
+    console.log("\nDeployment Summary:");
+    console.log({
       network: hre.network.name,
       pingReceiver: pingReceiverAddress,
       shoyuBashi: shoyuBashiAddress,
-      deployer: deployer.address,
-      timestamp: new Date().toISOString(),
-      transactionHash: pingReceiver.deploymentTransaction()?.hash
-    };
-    
-    console.log("\nDeployment Summary:");
-    console.log(JSON.stringify(deploymentInfo, null, 2));
+      deployer: deployer.address
+    });
     
     // Additional setup instructions
     console.log("\n📋 Next Steps:");

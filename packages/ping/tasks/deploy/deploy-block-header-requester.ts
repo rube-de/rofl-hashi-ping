@@ -1,5 +1,6 @@
 import { task, types } from "hardhat/config";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
+import { saveDeploymentInfo } from "../utils/save-deployment";
 
 task("deploy:block-header-requester", "Deploy the BlockHeaderRequester contract")
   .addOptionalParam("verify", "Verify contract on Etherscan", false, types.boolean)
@@ -61,28 +62,15 @@ task("deploy:block-header-requester", "Deploy the BlockHeaderRequester contract"
     console.log("==========================\n");
     
     // Save deployment info to a file
-    const fs = require("fs");
-    const path = require("path");
-    const deploymentInfo = {
-      network: hre.network.name,
-      contractAddress: contractAddress,
-      deployer: deployer.address,
-      blockNumber: await ethers.provider.getBlockNumber(),
-      timestamp: new Date().toISOString(),
-      transactionHash: blockHeaderRequester.deploymentTransaction()?.hash,
-    };
-    
-    const deploymentsDir = path.join(__dirname, "../deployments");
-    if (!fs.existsSync(deploymentsDir)) {
-      fs.mkdirSync(deploymentsDir, { recursive: true });
-    }
-    
-    const deploymentFile = path.join(
-      deploymentsDir,
-      `BlockHeaderRequester-${hre.network.name}.json`
+    await saveDeploymentInfo(
+      "BlockHeaderRequester",
+      contractAddress,
+      hre,
+      {
+        transactionHash: blockHeaderRequester.deploymentTransaction()?.hash,
+        constructorArgs: [], // No constructor arguments for this contract
+      }
     );
-    fs.writeFileSync(deploymentFile, JSON.stringify(deploymentInfo, null, 2));
-    console.log(`Deployment info saved to: ${deploymentFile}`);
     
     return contractAddress;
   });
