@@ -16,7 +16,7 @@ services:
       PING_SENDER_ADDRESS: ${PING_SENDER_ADDRESS:-}  # Required - PingSender contract address
       
       # Target chain configuration (Oasis Sapphire)
-      TARGET_NETWORK: ${TARGET_NETWORK:-sapphire-testnet}
+      TARGET_RPC_URL: ${TARGET_RPC_URL:-https://testnet.sapphire.oasis.io}  # Required - Oasis RPC endpoint
       PING_RECEIVER_ADDRESS: ${PING_RECEIVER_ADDRESS:-}  # Required - PingReceiver contract address
       ROFL_ADAPTER_ADDRESS: ${ROFL_ADAPTER_ADDRESS:-}  # Required - ROFLAdapter contract address
       

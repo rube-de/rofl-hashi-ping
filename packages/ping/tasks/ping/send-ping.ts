@@ -95,15 +95,6 @@ task("send-ping", "Send a simple cross-chain ping")
       console.log("  Ping ID:", pingId);
       console.log("  Sender:", signer.address);
       
-      console.log("\n📝 Next Steps:");
-      console.log("1. Wait for ROFL relayer to detect this Ping event");
-      console.log("2. ROFL will request block header if not already available");  
-      console.log("3. ROFL will generate Merkle proof and submit to target chain");
-      console.log("4. Check ping status with:");
-      console.log(`   npx hardhat check-ping --network <target-network> \\`);
-      console.log(`     --receiver <receiver-contract-address> \\`);
-      console.log(`     --ping-id ${pingId}`);
-      
       return {
         pingId,
         transactionHash: tx.hash,
