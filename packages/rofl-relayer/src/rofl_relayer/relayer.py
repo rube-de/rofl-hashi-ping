@@ -11,10 +11,14 @@ from typing import Optional
 
 from web3.types import EventData
 
+from web3 import Web3
+
 from .config import RelayerConfig
 from .event_processor import EventProcessor
+from .proof_manager import ProofManager
 from .utils.polling_event_listener import PollingEventListener
 from .utils.contract_utility import ContractUtility
+from .utils.rofl_utility import RoflUtility
 
 # Configure logging
 logging.basicConfig(
@@ -45,13 +49,44 @@ class ROFLRelayer:
         self.local_mode = config.local_mode
         self.running = False
         
+        # Initialize utilities
+        self._init_utilities()
+        
         # Initialize components
-        self.event_processor = EventProcessor()
+        self.event_processor = EventProcessor(
+            proof_manager=self.proof_manager,
+            config=config
+        )
         self.ping_listener: Optional[PollingEventListener] = None
         self.hash_listener: Optional[PollingEventListener] = None
         
         # Async coordination
         self.shutdown_event = asyncio.Event()
+    
+    def _init_utilities(self) -> None:
+        """
+        Initialize utility classes for proof generation.
+        """
+        # Initialize Web3 for source chain
+        self.web3_source = Web3(Web3.HTTPProvider(self.config.source_chain.rpc_url))
+        
+        # Initialize contract utility for target chain
+        self.contract_util = ContractUtility(
+            rpc_url=self.config.target_chain.rpc_url,
+            secret=self.config.target_chain.private_key if self.local_mode else ""
+        )
+        
+        # Initialize ROFL utility if not in local mode
+        self.rofl_util = None if self.local_mode else RoflUtility()
+        
+        # Initialize ProofManager
+        self.proof_manager = ProofManager(
+            web3_source=self.web3_source,
+            contract_util=self.contract_util,
+            rofl_util=self.rofl_util
+        )
+        
+        logger.info(f"Initialized ProofManager in {'local' if self.local_mode else 'ROFL'} mode")
     
     @classmethod
     def from_env(cls, local_mode: bool = False) -> "ROFLRelayer":

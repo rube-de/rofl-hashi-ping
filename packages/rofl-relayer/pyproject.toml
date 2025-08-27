@@ -7,6 +7,9 @@ dependencies = [
     "oasis-sapphire-py>=0.4.0",
     "aiohttp",
     "web3",
+    "rlp>=3.0.0",
+    "trie>=2.0.0",
+    "httpx",
 ]
 
 [dependency-groups]

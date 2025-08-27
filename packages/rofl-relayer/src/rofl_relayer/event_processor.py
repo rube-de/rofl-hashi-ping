@@ -8,10 +8,12 @@ keeping the processing logic separate from the relay orchestration.
 import logging
 from collections import deque
 from dataclasses import dataclass
-from typing import Deque, Dict, Optional, Set
+from typing import Any, Deque, Dict, Optional, Set
 
 from web3 import Web3
 from web3.types import EventData
+
+from .proof_manager import ProofManager
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +36,21 @@ class EventProcessor:
     MAX_PROCESSED_HASHES = 10000
     MAX_PENDING_PINGS = 1000
     
-    def __init__(self):
-        """Initialize the event processor."""
+    def __init__(self, proof_manager: Optional[ProofManager] = None, config: Optional[Any] = None):
+        """Initialize the event processor.
+        
+        Args:
+            proof_manager: ProofManager instance for generating and submitting proofs
+            config: RelayerConfig instance for accessing target addresses
+        """
         # State tracking with bounded collections
         self.processed_tx_hashes: Set[str] = set()
         self.pending_pings: Deque[PingEvent] = deque(maxlen=self.MAX_PENDING_PINGS)
         self.stored_hashes: Dict[int, str] = {}  # block_number -> block_hash
+        
+        # Proof generation
+        self.proof_manager = proof_manager
+        self.config = config
     
     async def process_ping_event(self, event: EventData) -> Optional[PingEvent]:
         """
@@ -127,10 +138,13 @@ class EventProcessor:
             logger.info(f"Hash stored - Block {block_id}: {block_hash[:10]}...")
             
             # Check if any pending pings can now be processed
-            matching_pings = self._find_pings_for_block(block_id)
+            matching_pings = [ping for ping in self.pending_pings if ping.block_number == block_id]
             if matching_pings:
                 logger.info(f"Found {len(matching_pings)} pings ready for block {block_id}")
-                # MVP: Additional proof generation would go here
+                # Process matched events with proof generation
+                if self.proof_manager and self.config:
+                    for ping in matching_pings:
+                        await self.process_matched_events(ping, block_hash)
             
             return (block_id, block_hash)
             
@@ -152,17 +166,36 @@ class EventProcessor:
                 list(self.processed_tx_hashes)[-self.MAX_PROCESSED_HASHES:]
             )
     
-    def _find_pings_for_block(self, block_number: int) -> list[PingEvent]:
+    async def process_matched_events(self, ping_event: PingEvent, block_hash: str) -> None:
         """
-        Find pending pings that match a specific block number.
+        Process matched Ping and HashStored events by generating and submitting proof.
         
         Args:
-            block_number: Block number to match
-            
-        Returns:
-            List of matching PingEvent objects
+            ping_event: The Ping event to process
+            block_hash: The stored block hash for verification
         """
-        return [ping for ping in self.pending_pings if ping.block_number == block_number]
+        try:
+            if not self.proof_manager or not self.config:
+                logger.warning("ProofManager or config not initialized, skipping proof generation")
+                return
+                
+            receiver_address = self.config.target_chain.ping_receiver_address
+            logger.info(f"Processing proof for Ping {ping_event.ping_id[:10]}... to receiver {receiver_address}")
+            
+            # Generate and submit proof
+            tx_hash = await self.proof_manager.process_ping_event(
+                ping_event,
+                receiver_address
+            )
+            
+            logger.info(f"Proof submitted successfully: {tx_hash}")
+            
+            # Remove from pending queue after successful processing
+            if ping_event in self.pending_pings:
+                self.pending_pings.remove(ping_event)
+                
+        except Exception as e:
+            logger.error(f"Failed to process proof for Ping {ping_event.ping_id[:10]}...: {e}", exc_info=True)
     
     def get_stats(self) -> dict:
         """

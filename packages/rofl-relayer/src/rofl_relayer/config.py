@@ -29,7 +29,7 @@ class TargetChainConfig:
 class MonitoringConfig:
     """Configuration for event monitoring and processing."""
     # Hard-coded sensible defaults for MVP
-    polling_interval: int = 30  # seconds
+    polling_interval: int = 12  # seconds
     retry_count: int = 3
     lookback_blocks: int = 100
     websocket_timeout: int = 60  # seconds
