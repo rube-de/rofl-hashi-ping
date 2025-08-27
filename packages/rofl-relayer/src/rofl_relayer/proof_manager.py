@@ -21,16 +21,16 @@ logger = logging.getLogger(__name__)
 class ProofManager:
     """Handles proof generation and submission for cross-chain messages."""
     
-    def __init__(self, web3_source: Web3, contract_util: Any, rofl_util: Any | None = None):
+    def __init__(self, w3_source: Web3, contract_util: Any, rofl_util: Any | None = None):
         """
         Initialize the ProofManager.
         
         Args:
-            web3_source: Web3 instance for the source chain
+            w3_source: Web3 instance for the source chain
             contract_util: Utility for contract interactions
             rofl_util: ROFL utility for transaction submission (optional)
         """
-        self.web3 = web3_source
+        self.web3 = w3_source
         self.contract_util = contract_util
         self.rofl_util = rofl_util
         
@@ -54,12 +54,6 @@ class ProofManager:
         
         # 1. Fetch receipt and block
         receipt = self.web3.eth.get_transaction_receipt(tx_hash)
-        
-        # Debug: Check what logs are in this transaction
-        if receipt and 'logs' in receipt:
-            logger.debug(f"Transaction has {len(receipt['logs'])} logs")
-            for i, log in enumerate(receipt['logs']):
-                logger.debug(f"  Log {i}: logIndex={log.get('logIndex')}, address={log.get('address')}")
         if not receipt:
             raise ValueError(f"Transaction receipt not found for {tx_hash}")
             
@@ -70,8 +64,8 @@ class ProofManager:
             
         logger.info(f"Processing block {block_number}, tx index {receipt['transactionIndex']}")
         
-        # 2. Get all receipts in block - try efficient method first
-        receipts = self._get_block_receipts(block_number, block)
+        # 2. Get all receipts in block
+        receipts = self._get_block_receipts(block_number)
             
         logger.info(f"Fetched {len(receipts)} receipts from block")
         
@@ -195,38 +189,21 @@ class ProofManager:
         """
         logger.info(f"Processing ping event with tx_hash={ping_event.tx_hash}, log_index={ping_event.log_index}")
         proof = await self.generate_proof(ping_event.tx_hash, ping_event.log_index)
-        logger.info(f"Generated proof with logIndex={proof[7]}, transactionIndex={proof[6]}")
         return await self.submit_proof(proof, receiver_address)
         
-    def _get_block_receipts(self, block_number: int, block: BlockData) -> list[TxReceipt]:
+    def _get_block_receipts(self, block_number: int) -> list[TxReceipt]:
         """
-        Get all receipts for a block, using eth_getBlockReceipts if available.
+        Get all receipts for a block using eth_getBlockReceipts.
         
         Args:
             block_number: The block number
-            block: Block data containing transactions
             
         Returns:
             List of transaction receipts
         """
-        try:
-            # Try using eth_getBlockReceipts for efficiency (single RPC call)
-            # This is supported by Geth 1.13+ and many RPC providers
-            logger.debug("Attempting to use eth_getBlockReceipts...")
-            receipts = self.web3.eth.get_block_receipts(block_number)
-            logger.info(f"Successfully fetched {len(receipts)} receipts using eth_getBlockReceipts")
-            return receipts
-        except (AttributeError, Exception) as e:
-            # Fallback to individual receipt fetching if eth_getBlockReceipts not available
-            logger.debug(f"eth_getBlockReceipts not available or failed: {e}")
-            logger.info("Falling back to individual receipt fetching...")
-            
-            receipts = []
-            for tx in block['transactions']:
-                tx_hash_str = tx['hash'].hex() if hasattr(tx['hash'], 'hex') else tx['hash']
-                tx_receipt = self.web3.eth.get_transaction_receipt(tx_hash_str)
-                receipts.append(tx_receipt)
-            return receipts
+        receipts = self.web3.eth.get_block_receipts(block_number)
+        logger.info(f"Fetched {len(receipts)} receipts from block {block_number}")
+        return receipts
     
     # Private helper methods
         

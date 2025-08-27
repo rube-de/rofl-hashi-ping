@@ -56,7 +56,7 @@ class ROFLRelayer:
         self.event_processor = EventProcessor(
             proof_manager=self.proof_manager,
             config=config,
-            web3_source=self.web3_source
+            w3_source=self.w3_source
         )
         self.ping_listener: Optional[PollingEventListener] = None
         self.hash_listener: Optional[PollingEventListener] = None
@@ -69,7 +69,7 @@ class ROFLRelayer:
         Initialize utility classes for proof generation.
         """
         # Initialize Web3 for source chain
-        self.web3_source = Web3(Web3.HTTPProvider(self.config.source_chain.rpc_url))
+        self.w3_source = Web3(Web3.HTTPProvider(self.config.source_chain.rpc_url))
         
         # Initialize contract utility for target chain
         self.contract_util = ContractUtility(
@@ -82,7 +82,7 @@ class ROFLRelayer:
         
         # Initialize ProofManager
         self.proof_manager = ProofManager(
-            web3_source=self.web3_source,
+            w3_source=self.w3_source,
             contract_util=self.contract_util,
             rofl_util=self.rofl_util
         )
