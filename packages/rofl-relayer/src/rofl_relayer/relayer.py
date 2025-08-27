@@ -110,12 +110,9 @@ class ROFLRelayer:
         """Initialize polling listeners for both chains."""
         logger.info("Initializing event monitoring...")
         
-        # Use ContractUtility for loading ABIs
-        contract_util = ContractUtility()
-        
-        # Load contract ABIs
-        ping_sender_abi = contract_util.get_contract_abi("PingSender")
-        rofl_adapter_abi = contract_util.get_contract_abi("ROFLAdapter")
+        # Load ABIs
+        ping_sender_abi = self.contract_util.get_contract_abi("PingSender")
+        rofl_adapter_abi = self.contract_util.get_contract_abi("ROFLAdapter")
         
         # Initialize PingSender event listener (source chain)
         self.ping_listener = PollingEventListener(

@@ -134,28 +134,30 @@ class ProofManager:
         """
         logger.info(f"Submitting proof to PingReceiver at {receiver_address}")
         
+        # Get the contract instance
+        abi = self.contract_util.get_contract_abi("PingReceiver")
+        contract = self.contract_util.w3.eth.contract(
+            address=Web3.to_checksum_address(receiver_address),
+            abi=abi
+        )
+        
         if self.rofl_util:
-            # ROFL mode: prepare transaction data for rofl_util
-            tx_data = self._prepare_tx_data(proof, receiver_address)
+            # ROFL mode: build transaction for rofl_util
+            tx_data = contract.functions.receivePing(proof).build_transaction({
+                'from': '0x0000000000000000000000000000000000000000',  # ROFL will override
+                'gas': 3000000,
+                'gasPrice': self.contract_util.w3.eth.gas_price,
+                'value': 0
+            })
             tx_hash = await self.rofl_util.submit_tx(tx_data)
             logger.info(f"Proof submitted via ROFL: {tx_hash}")
             return tx_hash
         else:
-            # Local mode: use contract_util to interact with contract
-            abi = self.contract_util.get_contract_abi("PingReceiver")
-            contract = self.contract_util.w3.eth.contract(
-                address=Web3.to_checksum_address(receiver_address),
-                abi=abi
-            )
-            
-            # Build and send transaction
-            tx = contract.functions.receivePing(proof).build_transaction({
-                'from': self.contract_util.w3.eth.default_account,
+            # Local mode: use transact() directly 
+            tx_hash = contract.functions.receivePing(proof).transact({
                 'gas': 3000000,
                 'gasPrice': self.contract_util.w3.eth.gas_price
             })
-            
-            tx_hash = self.contract_util.w3.eth.send_transaction(tx)
             logger.info(f"Proof submitted locally: {Web3.to_hex(tx_hash)}")
             return Web3.to_hex(tx_hash)
             
@@ -290,36 +292,3 @@ class ProofManager:
             logger.warning("Header hash mismatch. This may be due to network-specific encoding.")
             
         return Web3.to_hex(encoded)
-        
-    def _prepare_tx_data(self, proof: list[Any], receiver_address: str) -> dict[str, Any]:
-        """
-        Format transaction data for ROFL submission.
-        
-        Args:
-            proof: The proof array to submit
-            receiver_address: Target contract address
-            
-        Returns:
-            Transaction data formatted for ROFL utility
-        """
-        # Get contract ABI and encode function call
-        abi = self.contract_util.get_contract_abi("PingReceiver")
-        
-        # Create contract instance for encoding
-        contract = Web3().eth.contract(
-            address=Web3.to_checksum_address(receiver_address),
-            abi=abi
-        )
-        
-        # Encode the function call
-        encoded_data = contract.encode_abi("receivePing", [proof])
-        
-        # Prepare transaction parameters
-        tx_data = {
-            'to': receiver_address,
-            'data': encoded_data,
-            'gas': 3000000,
-            'value': 0
-        }
-        
-        return tx_data

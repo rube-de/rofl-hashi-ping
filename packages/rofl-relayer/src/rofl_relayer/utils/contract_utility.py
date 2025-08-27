@@ -13,37 +13,44 @@ class ContractUtility:
     Utility for contract interaction and ABI loading.
     
     Can be used in two modes:
-    1. Full mode: Initialize with network and secret for contract interaction
-    2. ABI-only mode: Initialize with empty strings to just load ABIs
+    1. Full mode: Initialize with RPC URL and secret for signing transactions
+    2. Read-only mode: Initialize with RPC URL only for building unsigned transactions
     """
 
-    def __init__(self, rpc_url: str = "", secret: str = ""):
+    def __init__(self, rpc_url: str, secret: str = ""):
         """
         Initialize the ContractUtility.
         
         Args:
-            rpc_url: RPC URL for the network (optional for ABI-only mode)
-            secret: Private key for transactions (optional for ABI-only mode)
+            rpc_url: RPC URL for the network (required)
+            secret: Private key for signing transactions (optional - if not provided, read-only mode)
         """
-        if rpc_url and secret:
-            # Full initialization for contract interaction
-            self.rpc_url = rpc_url
-            self.w3 = self.setup_web3_middleware(secret)
-        else:
-            # ABI-only mode - no network connection needed
-            self.rpc_url = None
-            self.w3 = None
+        if not rpc_url:
+            raise ValueError("RPC URL is required")
+            
+        self.rpc_url = rpc_url
+        
+        # Always create Web3 instance with RPC
+        self.w3 = Web3(Web3.HTTPProvider(self.rpc_url))
+        
+        # Add signing middleware only if secret is provided
+        if secret:
+            self._add_signing_middleware(secret)
 
-    def setup_web3_middleware(self, secret: str) -> Web3:
+    def _add_signing_middleware(self, secret: str) -> None:
+        """
+        Add signing middleware to the existing Web3 instance.
+        
+        Args:
+            secret: Private key for signing transactions
+        """
         if not secret:
-            raise ValueError("Private key is required for contract interaction")
+            raise ValueError("Private key is required for signing transactions")
 
         account: LocalAccount = Account.from_key(secret)
-        w3 = Web3(Web3.HTTPProvider(self.rpc_url))
-        w3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(account))
-        w3 = sapphire.wrap(w3, account)
-        w3.eth.default_account = account.address
-        return w3
+        self.w3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(account))
+        self.w3 = sapphire.wrap(self.w3, account)
+        self.w3.eth.default_account = account.address
 
     def get_contract_abi(self, contract_name: str) -> list:
         """Fetches ABI of the given contract from the contracts folder"""
