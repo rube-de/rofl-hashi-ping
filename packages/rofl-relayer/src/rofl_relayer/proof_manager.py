@@ -6,11 +6,12 @@ for cross-chain message verification using the Hashi protocol format.
 """
 
 import logging
-from typing import Any
+from typing import Any, List
 
 import rlp
 from trie import HexaryTrie
 from hexbytes import HexBytes
+from eth_utils import keccak, to_bytes, to_hex
 from web3 import Web3
 from web3.types import BlockData, TxReceipt
 
@@ -37,6 +38,8 @@ class ProofManager:
         """
         Generate Hashi-format proof for a transaction.
         
+        Uses eth_getBlockReceipts for efficient batch receipt fetching when available.
+        
         Args:
             tx_hash: Transaction hash containing the event
             log_index: Index of the log in the transaction receipt
@@ -51,6 +54,12 @@ class ProofManager:
         
         # 1. Fetch receipt and block
         receipt = self.web3.eth.get_transaction_receipt(tx_hash)
+        
+        # Debug: Check what logs are in this transaction
+        if receipt and 'logs' in receipt:
+            logger.debug(f"Transaction has {len(receipt['logs'])} logs")
+            for i, log in enumerate(receipt['logs']):
+                logger.debug(f"  Log {i}: logIndex={log.get('logIndex')}, address={log.get('address')}")
         if not receipt:
             raise ValueError(f"Transaction receipt not found for {tx_hash}")
             
@@ -61,12 +70,8 @@ class ProofManager:
             
         logger.info(f"Processing block {block_number}, tx index {receipt['transactionIndex']}")
         
-        # 2. Get all receipts in block
-        receipts = []
-        for tx in block['transactions']:
-            tx_hash_str = tx['hash'].hex() if hasattr(tx['hash'], 'hex') else tx['hash']
-            tx_receipt = self.web3.eth.get_transaction_receipt(tx_hash_str)
-            receipts.append(tx_receipt)
+        # 2. Get all receipts in block - try efficient method first
+        receipts = self._get_block_receipts(block_number, block)
             
         logger.info(f"Fetched {len(receipts)} receipts from block")
         
@@ -141,9 +146,25 @@ class ProofManager:
             abi=abi
         )
         
+        # Convert proof array to struct format expected by PingReceiver
+        # The proof array has 8 elements: [chainId, blockNumber, blockHeader, ancestralBlockNumber, 
+        # ancestralBlockHeaders, receiptProof, transactionIndex, logIndex]
+        receipt_proof_struct = {
+            'chainId': proof[0],
+            'blockNumber': proof[1],
+            'blockHeader': proof[2],
+            'ancestralBlockNumber': proof[3],
+            'ancestralBlockHeaders': proof[4],
+            'receiptProof': proof[5],  # This is the merkleProof array
+            'transactionIndex': proof[6],
+            'logIndex': proof[7]
+        }
+        
+        logger.info(f"Proof formatted for ReceiptProof struct with {len(proof[5])} merkle proof elements")
+        
         if self.rofl_util:
             # ROFL mode: build transaction for rofl_util
-            tx_data = contract.functions.receivePing(proof).build_transaction({
+            tx_data = contract.functions.receivePing(receipt_proof_struct).build_transaction({
                 'from': '0x0000000000000000000000000000000000000000',  # ROFL will override
                 'gas': 3000000,
                 'gasPrice': self.contract_util.w3.eth.gas_price,
@@ -154,7 +175,7 @@ class ProofManager:
             return tx_hash
         else:
             # Local mode: use transact() directly 
-            tx_hash = contract.functions.receivePing(proof).transact({
+            tx_hash = contract.functions.receivePing(receipt_proof_struct).transact({
                 'gas': 3000000,
                 'gasPrice': self.contract_util.w3.eth.gas_price
             })
@@ -172,9 +193,41 @@ class ProofManager:
         Returns:
             Transaction hash of the proof submission
         """
+        logger.info(f"Processing ping event with tx_hash={ping_event.tx_hash}, log_index={ping_event.log_index}")
         proof = await self.generate_proof(ping_event.tx_hash, ping_event.log_index)
+        logger.info(f"Generated proof with logIndex={proof[7]}, transactionIndex={proof[6]}")
         return await self.submit_proof(proof, receiver_address)
         
+    def _get_block_receipts(self, block_number: int, block: BlockData) -> list[TxReceipt]:
+        """
+        Get all receipts for a block, using eth_getBlockReceipts if available.
+        
+        Args:
+            block_number: The block number
+            block: Block data containing transactions
+            
+        Returns:
+            List of transaction receipts
+        """
+        try:
+            # Try using eth_getBlockReceipts for efficiency (single RPC call)
+            # This is supported by Geth 1.13+ and many RPC providers
+            logger.debug("Attempting to use eth_getBlockReceipts...")
+            receipts = self.web3.eth.get_block_receipts(block_number)
+            logger.info(f"Successfully fetched {len(receipts)} receipts using eth_getBlockReceipts")
+            return receipts
+        except (AttributeError, Exception) as e:
+            # Fallback to individual receipt fetching if eth_getBlockReceipts not available
+            logger.debug(f"eth_getBlockReceipts not available or failed: {e}")
+            logger.info("Falling back to individual receipt fetching...")
+            
+            receipts = []
+            for tx in block['transactions']:
+                tx_hash_str = tx['hash'].hex() if hasattr(tx['hash'], 'hex') else tx['hash']
+                tx_receipt = self.web3.eth.get_transaction_receipt(tx_hash_str)
+                receipts.append(tx_receipt)
+            return receipts
+    
     # Private helper methods
         
     def _to_bytes_safe(self, value) -> bytes:
@@ -236,7 +289,11 @@ class ProofManager:
     def _encode_block_header(self, block: BlockData) -> str:
         """
         Serialize block header to match Ethereum block encoding.
-        Note: web3.py doesn't provide a built-in method for this.
+        CRITICAL: Must match the exact encoding that @ethereumjs/block uses.
+        
+        This implementation handles all hardfork fields up to Prague (EIP-7685).
+        The fields are added conditionally based on their presence in the block data,
+        matching the behavior of @ethereumjs/block's createBlockHeaderFromRPC.
         
         Args:
             block: Block data from Web3
@@ -245,41 +302,52 @@ class ProofManager:
             Hex string of serialized block header
         """
         # Convert block fields to bytes for RLP encoding (handling HexBytes)
+        # IMPORTANT: Order matters and must match Ethereum spec exactly
+        # Fields 0-14: Legacy block header fields (always present)
         header_fields = [
-            self._to_bytes_safe(block['parentHash']),
-            self._to_bytes_safe(block['sha3Uncles']),
-            self._to_bytes_safe(block['miner']),
-            self._to_bytes_safe(block['stateRoot']),
-            self._to_bytes_safe(block['transactionsRoot']),
-            self._to_bytes_safe(block['receiptsRoot']),
-            self._to_bytes_safe(block['logsBloom']),
-            block['difficulty'],
-            block['number'],
-            block['gasLimit'],
-            block['gasUsed'],
-            block['timestamp'],
-            self._to_bytes_safe(block['extraData']),
-            self._to_bytes_safe(block['mixHash']),
-            self._to_bytes_safe(block['nonce']),
+            self._to_bytes_safe(block['parentHash']),      # 0
+            self._to_bytes_safe(block['sha3Uncles']),      # 1
+            self._to_bytes_safe(block['miner']),           # 2
+            self._to_bytes_safe(block['stateRoot']),       # 3
+            self._to_bytes_safe(block['transactionsRoot']), # 4
+            self._to_bytes_safe(block['receiptsRoot']),    # 5
+            self._to_bytes_safe(block['logsBloom']),       # 6
+            block['difficulty'],  # 7 - RLP encoder handles ints
+            block['number'],      # 8 - RLP encoder handles ints
+            block['gasLimit'],    # 9 - RLP encoder handles ints
+            block['gasUsed'],     # 10 - RLP encoder handles ints
+            block['timestamp'],   # 11 - RLP encoder handles ints
+            self._to_bytes_safe(block['extraData']),       # 12
+            self._to_bytes_safe(block['mixHash']),         # 13
+            self._to_bytes_safe(block['nonce']),           # 14
         ]
         
-        # Add baseFeePerGas if present (post-London)
+        # Field 15: baseFeePerGas (London, EIP-1559)
         if 'baseFeePerGas' in block and block['baseFeePerGas'] is not None:
             header_fields.append(block['baseFeePerGas'])
             
-        # Add withdrawalsRoot if present (post-Shanghai)  
+        # Field 16: withdrawalsRoot (Shanghai, EIP-4895)
         if 'withdrawalsRoot' in block and block['withdrawalsRoot'] is not None:
             header_fields.append(self._to_bytes_safe(block['withdrawalsRoot']))
             
-        # Add additional post-Shanghai fields if present
+        # Field 17: blobGasUsed (Cancun, EIP-4844)
         if 'blobGasUsed' in block and block['blobGasUsed'] is not None:
             header_fields.append(block['blobGasUsed'])
             
+        # Field 18: excessBlobGas (Cancun, EIP-4844)
         if 'excessBlobGas' in block and block['excessBlobGas'] is not None:
             header_fields.append(block['excessBlobGas'])
             
+        # Field 19: parentBeaconBlockRoot (Cancun, EIP-4788)
         if 'parentBeaconBlockRoot' in block and block['parentBeaconBlockRoot'] is not None:
             header_fields.append(self._to_bytes_safe(block['parentBeaconBlockRoot']))
+            
+        # Field 20: requestsRoot (Prague/Cancun, EIP-7685)
+        # This field is for consensus layer triggered execution requests
+        # It may also be called 'requestsHash' in some implementations
+        requests_field = block.get('requestsRoot') or block.get('requestsHash')
+        if requests_field is not None:
+            header_fields.append(self._to_bytes_safe(requests_field))
             
         # RLP encode the header
         encoded = rlp.encode(header_fields)
@@ -289,6 +357,18 @@ class ProofManager:
         block_hash_bytes = self._to_bytes_safe(block['hash'])
         
         if calculated_hash != block_hash_bytes:
-            logger.warning("Header hash mismatch. This may be due to network-specific encoding.")
+            logger.warning(f"Header hash mismatch. Calculated: {Web3.to_hex(calculated_hash)}, Expected: {Web3.to_hex(block_hash_bytes)}")
+            logger.warning("This may be due to network-specific encoding or missing fields.")
+            logger.debug(f"Block fields present: {list(block.keys())}")
+            logger.debug(f"Header has {len(header_fields)} fields")
+            logger.debug(f"Post-London fields: baseFeePerGas={block.get('baseFeePerGas')}, "
+                        f"withdrawalsRoot={block.get('withdrawalsRoot')}, "
+                        f"blobGasUsed={block.get('blobGasUsed')}, "
+                        f"excessBlobGas={block.get('excessBlobGas')}, "
+                        f"parentBeaconBlockRoot={block.get('parentBeaconBlockRoot')}, "
+                        f"requestsRoot={block.get('requestsRoot')}, "
+                        f"requestsHash={block.get('requestsHash')}")
+            # Log the encoded header for debugging
+            logger.debug(f"Encoded header (first 100 chars): {Web3.to_hex(encoded)[:100]}")
             
         return Web3.to_hex(encoded)

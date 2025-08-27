@@ -10,6 +10,7 @@ dependencies = [
     "rlp>=3.0.0",
     "trie>=2.0.0",
     "httpx",
+    "eth-utils>=5.3.0",
 ]
 
 [dependency-groups]

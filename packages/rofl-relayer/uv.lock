@@ -1416,6 +1416,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
+    { name = "eth-utils" },
     { name = "httpx" },
     { name = "oasis-sapphire-py" },
     { name = "rlp" },
@@ -1434,6 +1435,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp" },
+    { name = "eth-utils", specifier = ">=5.3.0" },
     { name = "httpx" },
     { name = "oasis-sapphire-py", specifier = ">=0.4.0" },
     { name = "rlp", specifier = ">=3.0.0" },

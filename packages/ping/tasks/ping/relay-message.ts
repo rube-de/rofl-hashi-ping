@@ -6,8 +6,8 @@ import * as fs from "fs";
 type ProofData = [number, number, string, number, string[], string[], string, number];
 
 task("relay-message", "Relay cross-chain ping message using cryptographic proof")
-  .addParam("receiver", "PingReceiver contract address on destination chain")
   .addParam("proof", "Proof data (JSON file path or inline JSON string)")
+  .addOptionalParam("receiver", "PingReceiver contract address on destination chain", "0x1f54b7AF3A462aABed01D5910a3e5911e76D4B51")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;
     

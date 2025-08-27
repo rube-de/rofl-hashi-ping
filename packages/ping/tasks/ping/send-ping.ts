@@ -2,7 +2,7 @@ import { task } from "hardhat/config";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 
 task("send-ping", "Send a simple cross-chain ping")
-  .addParam("sender", "Address of PingSender contract")
+  .addOptionalParam("sender", "Address of PingSender contract", "0xDCC23A03E6b6aA254cA5B0be942dD5CafC9A2299")
   .addOptionalParam("from", "Sender address (defaults to first signer)")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;

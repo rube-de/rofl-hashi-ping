@@ -49,7 +49,7 @@ class ContractUtility:
 
         account: LocalAccount = Account.from_key(secret)
         self.w3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(account))
-        self.w3 = sapphire.wrap(self.w3, account)
+        # self.w3 = sapphire.wrap(self.w3, account)
         self.w3.eth.default_account = account.address
 
     def get_contract_abi(self, contract_name: str) -> list:
