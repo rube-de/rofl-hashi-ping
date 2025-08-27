@@ -43,8 +43,9 @@ async def test_proof_matches_typescript():
     # Extract transaction details from proof
     # The proof.json doesn't contain tx hash, so we need to get it from env or hardcode
     # For testing, we'll use the known transaction from the proof
-    tx_hash = "0x3794cbba02e0ee19f965e8344f63bbdbbeb8f43e7dc637b5f7e9c086cfd5c76a"
-    log_index = typescript_proof[7]  # Log index from proof
+    # Updated to use the newer transaction
+    tx_hash = "0x9b1003047adc2a6a1f0c4fb5398ee40108097f4a1716684af1d4e77d21603546"
+    expected_log_index = typescript_proof[7]  # Log index from proof
     
     # Initialize Web3 connection to source chain
     source_rpc = os.environ.get("SOURCE_RPC_URL", "https://ethereum-sepolia.publicnode.com")
@@ -54,21 +55,50 @@ async def test_proof_matches_typescript():
     if not web3_source.is_connected():
         print("❌ Failed to connect to source chain")
         return False
+    
+    # Get transaction receipt to extract Ping event details
+    print(f"📥 Fetching transaction receipt to get Ping event details...")
+    receipt = web3_source.eth.get_transaction_receipt(tx_hash)
+    if not receipt:
+        print("❌ Transaction receipt not found")
+        return False
+    
+    # Find the Ping event in the logs
+    # Ping event signature: Ping(address,uint256)
+    ping_topic = Web3.keccak(text="Ping(address,uint256)")
+    sender = None
+    event_block_number = None
+    
+    for log in receipt['logs']:
+        if len(log['topics']) >= 3 and log['topics'][0] == ping_topic:
+            # Extract sender from topics[1] (remove padding)
+            sender_bytes = log['topics'][1][-20:]  # Last 20 bytes is the address
+            sender = Web3.to_checksum_address(sender_bytes)
+            # Extract block number from topics[2]
+            event_block_number = int.from_bytes(log['topics'][2], 'big')
+            print(f"   Found Ping event - Sender: {sender}, Block: {event_block_number}")
+            break
+    
+    if not sender:
+        print("❌ Ping event not found in transaction")
+        return False
         
     # Initialize utilities
-    contract_util = ContractUtility()  # ABI-only mode
+    # Use a dummy RPC for ContractUtility since we only need ABI loading
+    contract_util = ContractUtility(rpc_url="http://localhost:8545")  # Dummy URL for ABI-only mode
     
     # Create ProofManager
     proof_manager = ProofManager(
-        web3_source=web3_source,
+        w3_source=web3_source,
         contract_util=contract_util,
         rofl_util=None  # Testing without ROFL
     )
     
-    # Generate proof
+    # Generate proof with new signature
     print(f"\n🔮 Generating proof for transaction {tx_hash}")
+    print(f"   Using sender: {sender}, block: {event_block_number}")
     try:
-        python_proof = await proof_manager.generate_proof(tx_hash, log_index)
+        python_proof = await proof_manager.generate_proof(tx_hash, sender, event_block_number)
         print("✅ Proof generated successfully")
     except Exception as e:
         print(f"❌ Failed to generate proof: {e}")

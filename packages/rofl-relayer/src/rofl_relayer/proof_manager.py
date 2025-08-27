@@ -10,10 +10,10 @@ from typing import Any, List
 
 import rlp
 from trie import HexaryTrie
-from hexbytes import HexBytes
-from eth_utils import keccak, to_bytes, to_hex
 from web3 import Web3
-from web3.types import BlockData, TxReceipt
+from web3.types import TxReceipt
+
+from .utils.blockchain_encoder import BlockchainEncoder
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,56 @@ class ProofManager:
         self.contract_util = contract_util
         self.rofl_util = rofl_util
         
-    async def generate_proof(self, tx_hash: str, log_index: int = 0) -> list[Any]:
+    def _get_transaction_local_index(self, tx_hash: str, sender: str, event_block_number: int) -> int:
+        """
+        Find the transaction-local index for a specific Ping event.
+        
+        This matches the event by its content rather than using global log index.
+        For Ping events:
+        - Event signature: Ping(address,uint256)
+        - Topics[0]: keccak256("Ping(address,uint256)")
+        - Topics[1]: indexed sender address (padded to 32 bytes)
+        - Topics[2]: indexed block number (as 32 bytes)
+        
+        Args:
+            tx_hash: Transaction hash containing the event
+            sender: Sender address from the Ping event
+            event_block_number: Block number from the Ping event
+            
+        Returns:
+            Transaction-local index (position within transaction's logs)
+        """
+        receipt = self.web3.eth.get_transaction_receipt(Web3.to_hex(hexstr=tx_hash))
+        if not receipt or 'logs' not in receipt:
+            logger.warning(f"No logs found in transaction {tx_hash}")
+            return 0
+        
+        # Calculate Ping event signature hash
+        ping_topic = Web3.keccak(text="Ping(address,uint256)")
+        
+        # Prepare sender address (pad to 32 bytes)
+        sender_bytes = Web3.to_bytes(hexstr=sender)
+        sender_topic = sender_bytes.rjust(32, b'\0')
+        
+        # Prepare block number (as 32 bytes)
+        block_topic = event_block_number.to_bytes(32, 'big')
+        
+        # Find matching Ping event in transaction logs
+        for i, log in enumerate(receipt['logs']):
+            topics = log.get('topics', [])
+            if len(topics) >= 3:
+                # Check if this is our Ping event
+                if (topics[0] == ping_topic and
+                    topics[1] == sender_topic and
+                    topics[2] == block_topic):
+                    logger.info(f"Found Ping event at transaction-local index {i}")
+                    return i
+        
+        # If not found (shouldn't happen), default to 0
+        logger.warning(f"Ping event not found in transaction logs, defaulting to index 0")
+        return 0
+    
+    async def generate_proof(self, tx_hash: str, sender: str, event_block_number: int) -> list[Any]:
         """
         Generate Hashi-format proof for a transaction.
         
@@ -42,7 +91,8 @@ class ProofManager:
         
         Args:
             tx_hash: Transaction hash containing the event
-            log_index: Index of the log in the transaction receipt
+            sender: Sender address from the Ping event
+            event_block_number: Block number from the Ping event
             
         Returns:
             8-element array matching TypeScript format for Hashi proof
@@ -50,10 +100,12 @@ class ProofManager:
         Raises:
             ValueError: If receipt or block not found, or proof generation fails
         """
-        logger.info(f"Generating proof for tx {tx_hash}, log index {log_index}")
+        # Calculate transaction-local log index from event content
+        log_index = self._get_transaction_local_index(tx_hash, sender, event_block_number)
+        logger.info(f"Generating proof for tx {tx_hash}, transaction-local log index {log_index}")
         
         # 1. Fetch receipt and block
-        receipt = self.web3.eth.get_transaction_receipt(tx_hash)
+        receipt = self.web3.eth.get_transaction_receipt(Web3.to_hex(hexstr=tx_hash))
         if not receipt:
             raise ValueError(f"Transaction receipt not found for {tx_hash}")
             
@@ -78,7 +130,7 @@ class ProofManager:
             key = rlp.encode(b'') if tx_index == 0 else rlp.encode(tx_index)
             
             # Encode the receipt
-            encoded_receipt = self._encode_receipt(rec)
+            encoded_receipt = BlockchainEncoder.encode_receipt(rec)
             
             # Put in trie
             trie[key] = encoded_receipt
@@ -100,7 +152,7 @@ class ProofManager:
         merkle_proof = [Web3.to_hex(rlp.encode(node)) for node in proof_nodes]
         
         # 6. Encode block header
-        encoded_block_header = self._encode_block_header(block)
+        encoded_block_header = BlockchainEncoder.encode_block_header(block)
         
         # 7. Get chain ID
         chain_id = int(self.web3.eth.chain_id)
@@ -181,14 +233,14 @@ class ProofManager:
         Complete flow: generate and submit proof for a ping event.
         
         Args:
-            ping_event: The PingEvent object containing tx_hash and log_index
+            ping_event: The PingEvent object containing tx_hash, sender, and block_number
             receiver_address: Address of the PingReceiver contract
             
         Returns:
             Transaction hash of the proof submission
         """
-        logger.info(f"Processing ping event with tx_hash={ping_event.tx_hash}, log_index={ping_event.log_index}")
-        proof = await self.generate_proof(ping_event.tx_hash, ping_event.log_index)
+        logger.info(f"Processing ping event with tx_hash={ping_event.tx_hash}, sender={ping_event.sender}, block={ping_event.block_number}")
+        proof = await self.generate_proof(ping_event.tx_hash, ping_event.sender, ping_event.block_number)
         return await self.submit_proof(proof, receiver_address)
         
     def _get_block_receipts(self, block_number: int) -> list[TxReceipt]:
@@ -205,147 +257,3 @@ class ProofManager:
         logger.info(f"Fetched {len(receipts)} receipts from block {block_number}")
         return receipts
     
-    # Private helper methods
-        
-    def _to_bytes_safe(self, value) -> bytes:
-        """
-        Safely convert value to bytes, handling HexBytes, bytes, and hex strings.
-        
-        Args:
-            value: Value to convert (HexBytes, bytes, or hex string)
-            
-        Returns:
-            Bytes representation
-        """
-        if isinstance(value, HexBytes):
-            return bytes(value)
-        elif isinstance(value, bytes):
-            return value
-        else:
-            return Web3.to_bytes(hexstr=value)
-    
-    def _encode_receipt(self, receipt: TxReceipt) -> bytes:
-        """
-        RLP encode a single receipt with transaction type handling.
-        
-        Args:
-            receipt: Transaction receipt to encode
-            
-        Returns:
-            RLP encoded receipt with type prefix if needed
-        """
-        # Get transaction type (0 for legacy, 2 for EIP-1559)
-        tx_type = int(receipt.get('type', 0))
-        
-        # Encode receipt fields
-        status = b'\x01' if receipt['status'] == 1 else b''
-        cumulative_gas = receipt['cumulativeGasUsed']
-        logs_bloom = receipt['logsBloom']
-        
-        # Encode logs (handling both HexBytes and hex strings)
-        encoded_logs = []
-        for log in receipt['logs']:
-            encoded_log = [
-                self._to_bytes_safe(log['address']),
-                [self._to_bytes_safe(topic) for topic in log['topics']],
-                self._to_bytes_safe(log['data'])
-            ]
-            encoded_logs.append(encoded_log)
-            
-        # Create receipt tuple
-        receipt_data = [status, cumulative_gas, logs_bloom, encoded_logs]
-        encoded = rlp.encode(receipt_data)
-        
-        # Add transaction type prefix if not legacy (type 0)
-        if tx_type == 0:
-            return encoded
-        else:
-            # For typed transactions, prepend the type byte
-            return bytes([tx_type]) + encoded
-            
-    def _encode_block_header(self, block: BlockData) -> str:
-        """
-        Serialize block header to match Ethereum block encoding.
-        CRITICAL: Must match the exact encoding that @ethereumjs/block uses.
-        
-        This implementation handles all hardfork fields up to Prague (EIP-7685).
-        The fields are added conditionally based on their presence in the block data,
-        matching the behavior of @ethereumjs/block's createBlockHeaderFromRPC.
-        
-        Args:
-            block: Block data from Web3
-            
-        Returns:
-            Hex string of serialized block header
-        """
-        # Convert block fields to bytes for RLP encoding (handling HexBytes)
-        # IMPORTANT: Order matters and must match Ethereum spec exactly
-        # Fields 0-14: Legacy block header fields (always present)
-        header_fields = [
-            self._to_bytes_safe(block['parentHash']),      # 0
-            self._to_bytes_safe(block['sha3Uncles']),      # 1
-            self._to_bytes_safe(block['miner']),           # 2
-            self._to_bytes_safe(block['stateRoot']),       # 3
-            self._to_bytes_safe(block['transactionsRoot']), # 4
-            self._to_bytes_safe(block['receiptsRoot']),    # 5
-            self._to_bytes_safe(block['logsBloom']),       # 6
-            block['difficulty'],  # 7 - RLP encoder handles ints
-            block['number'],      # 8 - RLP encoder handles ints
-            block['gasLimit'],    # 9 - RLP encoder handles ints
-            block['gasUsed'],     # 10 - RLP encoder handles ints
-            block['timestamp'],   # 11 - RLP encoder handles ints
-            self._to_bytes_safe(block['extraData']),       # 12
-            self._to_bytes_safe(block['mixHash']),         # 13
-            self._to_bytes_safe(block['nonce']),           # 14
-        ]
-        
-        # Field 15: baseFeePerGas (London, EIP-1559)
-        if 'baseFeePerGas' in block and block['baseFeePerGas'] is not None:
-            header_fields.append(block['baseFeePerGas'])
-            
-        # Field 16: withdrawalsRoot (Shanghai, EIP-4895)
-        if 'withdrawalsRoot' in block and block['withdrawalsRoot'] is not None:
-            header_fields.append(self._to_bytes_safe(block['withdrawalsRoot']))
-            
-        # Field 17: blobGasUsed (Cancun, EIP-4844)
-        if 'blobGasUsed' in block and block['blobGasUsed'] is not None:
-            header_fields.append(block['blobGasUsed'])
-            
-        # Field 18: excessBlobGas (Cancun, EIP-4844)
-        if 'excessBlobGas' in block and block['excessBlobGas'] is not None:
-            header_fields.append(block['excessBlobGas'])
-            
-        # Field 19: parentBeaconBlockRoot (Cancun, EIP-4788)
-        if 'parentBeaconBlockRoot' in block and block['parentBeaconBlockRoot'] is not None:
-            header_fields.append(self._to_bytes_safe(block['parentBeaconBlockRoot']))
-            
-        # Field 20: requestsRoot (Prague/Cancun, EIP-7685)
-        # This field is for consensus layer triggered execution requests
-        # It may also be called 'requestsHash' in some implementations
-        requests_field = block.get('requestsRoot') or block.get('requestsHash')
-        if requests_field is not None:
-            header_fields.append(self._to_bytes_safe(requests_field))
-            
-        # RLP encode the header
-        encoded = rlp.encode(header_fields)
-        
-        # Verify hash matches
-        calculated_hash = Web3.keccak(encoded)
-        block_hash_bytes = self._to_bytes_safe(block['hash'])
-        
-        if calculated_hash != block_hash_bytes:
-            logger.warning(f"Header hash mismatch. Calculated: {Web3.to_hex(calculated_hash)}, Expected: {Web3.to_hex(block_hash_bytes)}")
-            logger.warning("This may be due to network-specific encoding or missing fields.")
-            logger.debug(f"Block fields present: {list(block.keys())}")
-            logger.debug(f"Header has {len(header_fields)} fields")
-            logger.debug(f"Post-London fields: baseFeePerGas={block.get('baseFeePerGas')}, "
-                        f"withdrawalsRoot={block.get('withdrawalsRoot')}, "
-                        f"blobGasUsed={block.get('blobGasUsed')}, "
-                        f"excessBlobGas={block.get('excessBlobGas')}, "
-                        f"parentBeaconBlockRoot={block.get('parentBeaconBlockRoot')}, "
-                        f"requestsRoot={block.get('requestsRoot')}, "
-                        f"requestsHash={block.get('requestsHash')}")
-            # Log the encoded header for debugging
-            logger.debug(f"Encoded header (first 100 chars): {Web3.to_hex(encoded)[:100]}")
-            
-        return Web3.to_hex(encoded)

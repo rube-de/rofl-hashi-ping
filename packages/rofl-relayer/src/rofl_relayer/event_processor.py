@@ -10,8 +10,8 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any, Deque, Dict, Optional, Set
 
-from web3 import Web3
 from web3.types import EventData
+from web3 import Web3
 
 from .proof_manager import ProofManager
 
@@ -23,7 +23,6 @@ class PingEvent:
     """Represents a Ping event from the source chain."""
     tx_hash: str
     block_number: int
-    log_index: int
     sender: str
     timestamp: int
     ping_id: str
@@ -36,13 +35,12 @@ class EventProcessor:
     MAX_PROCESSED_HASHES = 10000
     MAX_PENDING_PINGS = 1000
     
-    def __init__(self, proof_manager: Optional[ProofManager] = None, config: Optional[Any] = None, w3_source: Optional[Web3] = None):
+    def __init__(self, proof_manager: Optional[ProofManager] = None, config: Optional[Any] = None):
         """Initialize the event processor.
         
         Args:
             proof_manager: ProofManager instance for generating and submitting proofs
             config: RelayerConfig instance for accessing target addresses
-            w3_source: Web3 instance for the source chain (for fetching receipts)
         """
         # State tracking with bounded collections
         self.processed_tx_hashes: Set[str] = set()
@@ -52,7 +50,6 @@ class EventProcessor:
         # Proof generation
         self.proof_manager = proof_manager
         self.config = config
-        self.w3_source = w3_source
     
     async def process_ping_event(self, event: EventData) -> Optional[PingEvent]:
         """
@@ -88,32 +85,15 @@ class EventProcessor:
             sender = args.get('sender', '0x0')
             timestamp = args.get('timestamp', 0)
             
-            # Calculate transaction-local log index (position within the transaction's logs)
-            # The proof verification needs the index within the transaction, not the global block index
-            log_index = 0  # Default to first log in transaction
-            if self.w3_source:
-                try:
-                    event_global_index = event.get('logIndex', 0)
-                    receipt = self.w3_source.eth.get_transaction_receipt(tx_hash)
-                    if receipt and 'logs' in receipt:
-                        # Find this event's position within the transaction's logs
-                        for i, log in enumerate(receipt['logs']):
-                            if log.get('logIndex') == event_global_index:
-                                log_index = i
-                                break
-                except Exception as e:
-                    logger.warning(f"Failed to calculate transaction-local log index: {e}, defaulting to 0")
-            else:
-                logger.warning("No w3_source available, defaulting to log index 0")
-            
-            # Generate ping ID (hash of transaction + log index for uniqueness)
-            ping_id = Web3.keccak(text=f"{tx_hash}-{log_index}").hex()
+            # Store event data for later proof generation
+            # ProofManager will calculate the correct transaction-local index
+            # Generate ping ID using transaction hash and event args for uniqueness
+            ping_id = Web3.keccak(text=f"{tx_hash}-{sender}-{block_number}").hex()
             
             # Create typed ping event
             ping_event = PingEvent(
                 tx_hash=tx_hash,
                 block_number=block_number,
-                log_index=log_index,  # This is now the transaction-local index
                 sender=sender,
                 timestamp=timestamp,
                 ping_id=ping_id
@@ -163,7 +143,7 @@ class EventProcessor:
                 # Process matched events with proof generation
                 if self.proof_manager and self.config:
                     for ping in matching_pings:
-                        await self.process_matched_events(ping, block_hash)
+                        await self.process_matched_events(ping)
             
             return (block_id, block_hash)
             
@@ -185,13 +165,12 @@ class EventProcessor:
                 list(self.processed_tx_hashes)[-self.MAX_PROCESSED_HASHES:]
             )
     
-    async def process_matched_events(self, ping_event: PingEvent, block_hash: str) -> None:
+    async def process_matched_events(self, ping_event: PingEvent) -> None:
         """
         Process matched Ping and HashStored events by generating and submitting proof.
         
         Args:
             ping_event: The Ping event to process
-            block_hash: The stored block hash for verification
         """
         try:
             if not self.proof_manager or not self.config:

@@ -55,8 +55,7 @@ class ROFLRelayer:
         # Initialize components
         self.event_processor = EventProcessor(
             proof_manager=self.proof_manager,
-            config=config,
-            w3_source=self.w3_source
+            config=config
         )
         self.ping_listener: Optional[PollingEventListener] = None
         self.hash_listener: Optional[PollingEventListener] = None
