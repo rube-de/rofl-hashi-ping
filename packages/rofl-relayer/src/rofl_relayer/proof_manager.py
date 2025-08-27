@@ -6,7 +6,7 @@ for cross-chain message verification using the Hashi protocol format.
 """
 
 import logging
-from typing import Any, List
+from typing import Any, List, TYPE_CHECKING
 
 import rlp
 from trie import HexaryTrie
@@ -14,6 +14,9 @@ from web3 import Web3
 from web3.types import TxReceipt
 
 from .utils.blockchain_encoder import BlockchainEncoder
+
+if TYPE_CHECKING:
+    from .event_processor import PingEvent
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +37,7 @@ class ProofManager:
         self.contract_util = contract_util
         self.rofl_util = rofl_util
         
-    def _get_transaction_local_index(self, tx_hash: str, sender: str, event_block_number: int) -> int:
+    def _get_transaction_local_index(self, ping_event: 'PingEvent') -> int:
         """
         Find the transaction-local index for a specific Ping event.
         
@@ -46,27 +49,25 @@ class ProofManager:
         - Topics[2]: indexed block number (as 32 bytes)
         
         Args:
-            tx_hash: Transaction hash containing the event
-            sender: Sender address from the Ping event
-            event_block_number: Block number from the Ping event
+            ping_event: The PingEvent object containing tx_hash, sender, and block_number
             
         Returns:
             Transaction-local index (position within transaction's logs)
         """
-        receipt = self.web3.eth.get_transaction_receipt(Web3.to_hex(hexstr=tx_hash))
+        receipt = self.web3.eth.get_transaction_receipt(Web3.to_hex(hexstr=ping_event.tx_hash))
         if not receipt or 'logs' not in receipt:
-            logger.warning(f"No logs found in transaction {tx_hash}")
+            logger.warning(f"No logs found in transaction {ping_event.tx_hash}")
             return 0
         
         # Calculate Ping event signature hash
         ping_topic = Web3.keccak(text="Ping(address,uint256)")
         
         # Prepare sender address (pad to 32 bytes)
-        sender_bytes = Web3.to_bytes(hexstr=sender)
+        sender_bytes = Web3.to_bytes(hexstr=ping_event.sender)
         sender_topic = sender_bytes.rjust(32, b'\0')
         
         # Prepare block number (as 32 bytes)
-        block_topic = event_block_number.to_bytes(32, 'big')
+        block_topic = ping_event.block_number.to_bytes(32, 'big')
         
         # Find matching Ping event in transaction logs
         for i, log in enumerate(receipt['logs']):
@@ -83,16 +84,14 @@ class ProofManager:
         logger.warning(f"Ping event not found in transaction logs, defaulting to index 0")
         return 0
     
-    async def generate_proof(self, tx_hash: str, sender: str, event_block_number: int) -> list[Any]:
+    async def generate_proof(self, ping_event: 'PingEvent') -> list[Any]:
         """
-        Generate Hashi-format proof for a transaction.
+        Generate Hashi-format proof for a Ping event.
         
         Uses eth_getBlockReceipts for efficient batch receipt fetching when available.
         
         Args:
-            tx_hash: Transaction hash containing the event
-            sender: Sender address from the Ping event
-            event_block_number: Block number from the Ping event
+            ping_event: The PingEvent object containing all event data
             
         Returns:
             8-element array matching TypeScript format for Hashi proof
@@ -101,13 +100,13 @@ class ProofManager:
             ValueError: If receipt or block not found, or proof generation fails
         """
         # Calculate transaction-local log index from event content
-        log_index = self._get_transaction_local_index(tx_hash, sender, event_block_number)
-        logger.info(f"Generating proof for tx {tx_hash}, transaction-local log index {log_index}")
+        log_index = self._get_transaction_local_index(ping_event)
+        logger.info(f"Generating proof for tx {ping_event.tx_hash}, transaction-local log index {log_index}")
         
         # 1. Fetch receipt and block
-        receipt = self.web3.eth.get_transaction_receipt(Web3.to_hex(hexstr=tx_hash))
+        receipt = self.web3.eth.get_transaction_receipt(Web3.to_hex(hexstr=ping_event.tx_hash))
         if not receipt:
-            raise ValueError(f"Transaction receipt not found for {tx_hash}")
+            raise ValueError(f"Transaction receipt not found for {ping_event.tx_hash}")
             
         block_number = receipt['blockNumber']
         block = self.web3.eth.get_block(block_number, full_transactions=True)
@@ -240,7 +239,7 @@ class ProofManager:
             Transaction hash of the proof submission
         """
         logger.info(f"Processing ping event with tx_hash={ping_event.tx_hash}, sender={ping_event.sender}, block={ping_event.block_number}")
-        proof = await self.generate_proof(ping_event.tx_hash, ping_event.sender, ping_event.block_number)
+        proof = await self.generate_proof(ping_event)
         return await self.submit_proof(proof, receiver_address)
         
     def _get_block_receipts(self, block_number: int) -> list[TxReceipt]:
