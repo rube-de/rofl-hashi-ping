@@ -1,0 +1,34 @@
+services:
+  rofl-relayer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/rube-de/rofl-relayer:latest
+    platform: linux/amd64
+    container_name: rofl_relayer_local
+    entrypoint: /bin/sh -c 'uv run python main.py --local'
+    env_file:
+      - .env.local
+    environment:
+      # Python configuration
+      PYTHONUNBUFFERED: 1  # Disable output buffering for immediate log visibility
+      
+      # Source chain configuration (Ethereum Sepolia)
+      SOURCE_RPC_URL: ${SOURCE_RPC_URL:-}  # Required - Ethereum RPC endpoint
+      PING_SENDER_ADDRESS: ${PING_SENDER_ADDRESS:-}  # Required - PingSender contract address
+      
+      # Target chain configuration (Oasis Sapphire)
+      TARGET_RPC_URL: ${TARGET_RPC_URL:-https://testnet.sapphire.oasis.io}  # Required - Oasis RPC endpoint
+      PING_RECEIVER_ADDRESS: ${PING_RECEIVER_ADDRESS:-}  # Required - PingReceiver contract address
+      ROFL_ADAPTER_ADDRESS: ${ROFL_ADAPTER_ADDRESS:-}  # Required - ROFLAdapter contract address
+      
+      # Local mode configuration (for testing without ROFL)
+      #PRIVATE_KEY: ${PRIVATE_KEY:-}  # Required in local mode - private key for transactions
+    
+    restart: on-failure
+    # Note: No ROFL socket volume mount needed in local mode
+    
+    # Optional: Mount source code for development
+    # volumes:
+    #   - ./src:/app/src
+    #   - ./main.py:/app/main.py

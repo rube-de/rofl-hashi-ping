@@ -1,30 +1,38 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
-import "./tasks/deploy-block-header-requester";
+import "hardhat-switch-network";
+import "./tasks";
 import * as dotenv from "dotenv";
 
 dotenv.config();
 
-const accounts = process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : {
+// const accounts = process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : {
+//   mnemonic: "test test test test test test test test test test test junk",
+//   path: "m/44'/60'/0'/0",
+//   initialIndex: 0,
+//   count: 20,
+//   passphrase: "",
+// };
+
+const TEST_HDWALLET = {
   mnemonic: "test test test test test test test test test test test junk",
   path: "m/44'/60'/0'/0",
   initialIndex: 0,
   count: 20,
-  passphrase: "",
-};
+  passphrase: ""
+}
+
+const accounts = process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : TEST_HDWALLET;
 
 const config: HardhatUserConfig = {
-    networks: {
+  networks: {
     hardhat: {
-      forking: {
-        url: `https://base-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
-        enabled: !!process.env.ALCHEMY_API_KEY
-      }
+      accounts: TEST_HDWALLET
     },
     "sapphire-localnet": { // Sapphire localnet docker
       url: "http://localhost:8545",
       chainId: 0x5afd,
-      accounts,
+      accounts: TEST_HDWALLET,
     },    
     "base-mainnet": {
       url: `https://base-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
@@ -48,6 +56,12 @@ const config: HardhatUserConfig = {
     }
   },
   solidity: "0.8.28",
+  sourcify: {
+    enabled: true
+  },
+  etherscan: {
+    enabled: false
+  }
 };
 
 export default config;
