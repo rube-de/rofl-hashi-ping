@@ -215,9 +215,14 @@ class ProofManager:
                 'gasPrice': self.contract_util.w3.eth.gas_price,
                 'value': 0
             })
-            tx_hash = await self.rofl_util.submit_tx(tx_data)
-            logger.info(f"Proof submitted via ROFL: {tx_hash}")
-            return tx_hash
+            success = await self.rofl_util.submit_tx(tx_data)
+            if success:
+                logger.info("Proof submitted successfully via ROFL")
+                # Return a success indicator since ROFL doesn't provide tx hash
+                return "ROFL_SUBMITTED"
+            else:
+                logger.error("Failed to submit proof via ROFL")
+                raise Exception("ROFL submission failed")
         else:
             # Local mode: use transact() directly 
             tx_hash = contract.functions.receivePing(receipt_proof_struct).transact({
