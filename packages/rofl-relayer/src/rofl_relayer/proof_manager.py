@@ -33,7 +33,7 @@ class ProofManager:
             contract_util: Utility for contract interactions
             rofl_util: ROFL utility for transaction submission (optional)
         """
-        self.web3 = w3_source
+        self.w3_source = w3_source
         self.contract_util = contract_util
         self.rofl_util = rofl_util
         
@@ -54,7 +54,7 @@ class ProofManager:
         Returns:
             Transaction-local index (position within transaction's logs)
         """
-        receipt = self.web3.eth.get_transaction_receipt(Web3.to_hex(hexstr=ping_event.tx_hash))
+        receipt = self.w3_source.eth.get_transaction_receipt(Web3.to_hex(hexstr=ping_event.tx_hash))
         if not receipt or 'logs' not in receipt:
             logger.warning(f"No logs found in transaction {ping_event.tx_hash}")
             return 0
@@ -104,12 +104,12 @@ class ProofManager:
         logger.info(f"Generating proof for tx {ping_event.tx_hash}, transaction-local log index {log_index}")
         
         # 1. Fetch receipt and block
-        receipt = self.web3.eth.get_transaction_receipt(Web3.to_hex(hexstr=ping_event.tx_hash))
+        receipt = self.w3_source.eth.get_transaction_receipt(Web3.to_hex(hexstr=ping_event.tx_hash))
         if not receipt:
             raise ValueError(f"Transaction receipt not found for {ping_event.tx_hash}")
             
         block_number = receipt['blockNumber']
-        block = self.web3.eth.get_block(block_number, full_transactions=True)
+        block = self.w3_source.eth.get_block(block_number, full_transactions=True)
         if not block:
             raise ValueError(f"Block not found for block number {block_number}")
             
@@ -154,7 +154,7 @@ class ProofManager:
         encoded_block_header = BlockchainEncoder.encode_block_header(block)
         
         # 7. Get chain ID
-        chain_id = int(self.web3.eth.chain_id)
+        chain_id = int(self.w3_source.eth.chain_id)
         
         # 8. Create proof structure for Hashi
         proof = [
@@ -257,7 +257,7 @@ class ProofManager:
         Returns:
             List of transaction receipts
         """
-        receipts = self.web3.eth.get_block_receipts(block_number)
+        receipts = self.w3_source.eth.get_block_receipts(block_number)
         logger.info(f"Fetched {len(receipts)} receipts from block {block_number}")
         return receipts
     

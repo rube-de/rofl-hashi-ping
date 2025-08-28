@@ -1,4 +1,4 @@
-w#!/usr/bin/env python
+#!/usr/bin/env python
 """
 Test suite for the ROFL Relayer event monitoring functionality.
 """

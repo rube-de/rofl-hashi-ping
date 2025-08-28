@@ -2,7 +2,7 @@
 name = "rofl-relayer"
 version = "0.1.0"
 description = "ROFL Relayer for blockchain bridge operations"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
     "oasis-sapphire-py>=0.4.0",
     "aiohttp",
@@ -58,8 +58,8 @@ exclude = [
 line-length = 88
 indent-width = 4
 
-# Assume Python 3.10+
-target-version = "py310"
+# Assume Python 3.12+
+target-version = "py312"
 
 [tool.ruff.lint]
 # Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`) codes by default.

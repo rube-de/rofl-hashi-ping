@@ -46,7 +46,6 @@ class ROFLRelayer:
             config: Relayer configuration
         """
         self.config = config
-        self.local_mode = config.local_mode
         self.running = False
         
         # Initialize utilities
@@ -73,11 +72,11 @@ class ROFLRelayer:
         # Initialize contract utility for target chain
         self.contract_util = ContractUtility(
             rpc_url=self.config.target_chain.rpc_url,
-            secret=self.config.target_chain.private_key if self.local_mode else ""
+            secret=self.config.target_chain.private_key if self.config.local_mode else ""
         )
         
         # Initialize ROFL utility if not in local mode
-        self.rofl_util = None if self.local_mode else RoflUtility()
+        self.rofl_util = None if self.config.local_mode else RoflUtility()
         
         # Initialize ProofManager
         self.proof_manager = ProofManager(
@@ -86,7 +85,7 @@ class ROFLRelayer:
             rofl_util=self.rofl_util
         )
         
-        logger.info(f"Initialized ProofManager in {'local' if self.local_mode else 'ROFL'} mode")
+        logger.info(f"Initialized ProofManager in {'local' if self.config.local_mode else 'ROFL'} mode")
     
     @classmethod
     def from_env(cls, local_mode: bool = False) -> "ROFLRelayer":
