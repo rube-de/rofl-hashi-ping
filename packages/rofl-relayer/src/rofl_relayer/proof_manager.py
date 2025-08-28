@@ -12,6 +12,7 @@ import rlp
 from trie import HexaryTrie
 from web3 import Web3
 from web3.types import TxReceipt
+from eth_typing import HexStr
 
 from .utils.blockchain_encoder import BlockchainEncoder
 from .models import PingEvent
@@ -56,7 +57,7 @@ class ProofManager:
         Returns:
             Transaction-local index (position within transaction's logs)
         """
-        receipt = self.w3_source.eth.get_transaction_receipt(Web3.to_hex(hexstr=ping_event.tx_hash))
+        receipt = self.w3_source.eth.get_transaction_receipt(HexStr(ping_event.tx_hash))
         if not receipt or 'logs' not in receipt:
             logger.warning(f"No logs found in transaction {ping_event.tx_hash}")
             return 0
@@ -105,7 +106,7 @@ class ProofManager:
         logger.info(f"Generating proof for tx {ping_event.tx_hash}, transaction-local log index {log_index}")
         
         # 1. Fetch receipt and block
-        receipt = self.w3_source.eth.get_transaction_receipt(Web3.to_hex(hexstr=ping_event.tx_hash))
+        receipt = self.w3_source.eth.get_transaction_receipt(HexStr(ping_event.tx_hash))
         if not receipt:
             raise ValueError(f"Transaction receipt not found for {ping_event.tx_hash}")
             

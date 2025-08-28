@@ -95,14 +95,11 @@ class RelayerConfig:
             )
 
         private_key = os.environ.get("PRIVATE_KEY")
-        if not private_key:
-            if not local_mode:
-                private_key = None
-            else:
-                raise ValueError(
-                    "PRIVATE_KEY environment variable is required in local mode. "
-                    "This is used to sign transactions on the target chain"
-                )
+        if not private_key and local_mode:
+            raise ValueError(
+                "PRIVATE_KEY environment variable is required in local mode. "
+                "This is used to sign transactions on the target chain"
+            )
 
         # Monitoring configuration with hard-coded defaults
         monitoring_config = MonitoringConfig()

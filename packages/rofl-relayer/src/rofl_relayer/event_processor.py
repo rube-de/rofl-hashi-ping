@@ -6,12 +6,12 @@ keeping the processing logic separate from the relay orchestration.
 """
 
 import logging
-from collections import deque
-from typing import TYPE_CHECKING, Any, Optional
+from collections import OrderedDict, deque
 from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any, Optional
 
-from web3.types import EventData
 from web3 import Web3
+from web3.types import EventData
 
 from .models import PingEvent
 from .proof_manager import ProofManager
@@ -36,9 +36,8 @@ class EventProcessor:
             config: RelayerConfig instance for accessing target addresses
         """
         # State tracking with bounded collections
-        # Hybrid approach: deque for LRU eviction + set for O(1) lookups
-        self.processed_tx_hashes_deque: deque[str] = deque(maxlen=self.MAX_PROCESSED_HASHES)
-        self.processed_tx_hashes_set: set[str] = set()
+        # OrderedDict provides O(1) lookups and maintains insertion order for LRU
+        self.processed_tx_hashes: OrderedDict[str, None] = OrderedDict()
         self.pending_pings: deque[PingEvent] = deque(maxlen=self.MAX_PENDING_PINGS)
         self.stored_hashes: dict[int, str] = {}  # block_number -> block_hash
         
@@ -46,7 +45,7 @@ class EventProcessor:
         self.proof_manager = proof_manager
         self.config = config
     
-    async def process_ping_event(self, event: EventData) -> Optional[PingEvent]:
+    async def process_ping_event(self, event: EventData) -> PingEvent | None:
         """
         Process a Ping event from the source chain.
         
@@ -70,8 +69,8 @@ class EventProcessor:
                     logger.warning(f"Unexpected transaction hash type: {type(event.get('transactionHash'))}")
                     return None
             
-            # Skip if already processed (O(1) set lookup)
-            if tx_hash in self.processed_tx_hashes_set:
+            # Skip if already processed (O(1) OrderedDict lookup)
+            if tx_hash in self.processed_tx_hashes:
                 return None
             
             # Track processed transaction (with size limit)
@@ -156,24 +155,23 @@ class EventProcessor:
         """
         Track a processed transaction hash with automatic LRU eviction.
         
-        Uses a hybrid approach: set for O(1) lookups and deque for LRU behavior.
-        When the deque reaches maxlen, it automatically removes the oldest entry,
-        and we sync by removing it from the set as well.
+        Uses OrderedDict for O(1) lookups and automatic LRU behavior.
+        When we reach capacity, we remove the oldest entry (first inserted).
         
         Args:
             tx_hash: Transaction hash to track
         """
-        # Check if already exists to avoid duplicates (O(1) set lookup)
-        if tx_hash not in self.processed_tx_hashes_set:
-            # Check if deque is at capacity (will trigger eviction)
-            if len(self.processed_tx_hashes_deque) == self.MAX_PROCESSED_HASHES:
-                # The oldest hash is at index 0 (left side)
-                oldest_hash = self.processed_tx_hashes_deque[0]
-                self.processed_tx_hashes_set.discard(oldest_hash)
+        # Check if already exists - if so, move to end (most recent)
+        if tx_hash in self.processed_tx_hashes:
+            self.processed_tx_hashes.move_to_end(tx_hash)
+        else:
+            # Check if at capacity and evict oldest if needed
+            if len(self.processed_tx_hashes) >= self.MAX_PROCESSED_HASHES:
+                # Remove oldest (first) item - popitem(last=False) for FIFO
+                self.processed_tx_hashes.popitem(last=False)
             
-            # Add to both structures
-            self.processed_tx_hashes_deque.append(tx_hash)
-            self.processed_tx_hashes_set.add(tx_hash)
+            # Add new hash (becomes most recent)
+            self.processed_tx_hashes[tx_hash] = None
     
     async def process_matched_events(self, ping_event: PingEvent) -> None:
         """
@@ -213,7 +211,7 @@ class EventProcessor:
             Dictionary with current state metrics
         """
         return {
-            'processed_hashes': len(self.processed_tx_hashes_set),
+            'processed_hashes': len(self.processed_tx_hashes),
             'pending_pings': len(self.pending_pings),
             'stored_hashes': len(self.stored_hashes)
         }

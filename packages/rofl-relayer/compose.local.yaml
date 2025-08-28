@@ -7,6 +7,8 @@ services:
     platform: linux/amd64
     container_name: rofl_relayer_local
     entrypoint: /bin/sh -c 'uv run python main.py --local'
+    env_file:
+      - .env.local
     environment:
       # Python configuration
       PYTHONUNBUFFERED: 1  # Disable output buffering for immediate log visibility
@@ -21,7 +23,7 @@ services:
       ROFL_ADAPTER_ADDRESS: ${ROFL_ADAPTER_ADDRESS:-}  # Required - ROFLAdapter contract address
       
       # Local mode configuration (for testing without ROFL)
-      PRIVATE_KEY: ${PRIVATE_KEY:-}  # Required in local mode - private key for transactions
+      #PRIVATE_KEY: ${PRIVATE_KEY:-}  # Required in local mode - private key for transactions
     
     restart: on-failure
     # Note: No ROFL socket volume mount needed in local mode

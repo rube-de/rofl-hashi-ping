@@ -24,6 +24,8 @@ async def main():
     
     logger.info(f"Starting in {'LOCAL' if args.local else 'ROFL'} mode")
     
+    relayer = None
+    
     try:
         # Create relayer using factory method
         relayer = ROFLRelayer.from_env(local_mode=args.local)
@@ -41,11 +43,13 @@ async def main():
         sys.exit(1)
     except KeyboardInterrupt:
         logger.info("Received interrupt signal, shutting down...")
-        if 'relayer' in locals():
-            relayer.stop()
     except Exception as e:
         logger.error(f"Unexpected error: {e}", exc_info=True)
         sys.exit(1)
+    finally:
+        if relayer is not None:
+            logger.debug("Stopping relayer...")
+            relayer.stop()
 
 
 if __name__ == "__main__":

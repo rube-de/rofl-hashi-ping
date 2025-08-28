@@ -29,7 +29,8 @@ class RoflUtility:
         async with httpx.AsyncClient(transport=transport) as client:
             url = self.url if self.url and self.url.startswith('http') else "http://localhost"
             logger.debug(f"Posting to {url+path}: {json.dumps(payload)}")
-            response = await client.post(url + path, json=payload, timeout=None)
+            # Use 30-second timeout for blockchain operations
+            response = await client.post(url + path, json=payload, timeout=30.0)
             response.raise_for_status()
             return response.json()
 
