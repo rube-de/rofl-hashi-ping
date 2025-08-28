@@ -1,10 +1,26 @@
 {
   "name": "hardhat-project",
+  "scripts": {
+    "postinstall": "patch-package",
+    "build": "hardhat compile",
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "clean": "hardhat clean"
+  },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^6.1.0",
-    "hardhat": "^2.26.2"
+    "hardhat": "^2.26.2",
+    "hardhat-switch-network": "^1.2.0",
+    "patch-package": "^8.0.0"
   },
   "dependencies": {
+    "@eth-optimism/contracts-bedrock": "^0.17.3",
+    "@ethereumjs/block": "^10.0.0",
+    "@ethereumjs/common": "^10.0.0",
+    "@ethereumjs/rlp": "^10.0.0",
+    "@ethereumjs/trie": "^6.2.1",
+    "@ethereumjs/util": "^10.0.0",
+    "@oasisprotocol/sapphire-contracts": "^0.2.14",
     "dotenv": "^17.2.1"
   }
 }
