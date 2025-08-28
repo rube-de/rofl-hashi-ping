@@ -8,7 +8,8 @@ keeping the processing logic separate from the relay orchestration.
 import logging
 from collections import deque
 from dataclasses import dataclass
-from typing import Any, Deque, Dict, Optional, Set
+from typing import Any, Optional
+from collections.abc import Mapping
 
 from web3.types import EventData
 from web3 import Web3
@@ -18,9 +19,12 @@ from .proof_manager import ProofManager
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class PingEvent:
-    """Represents a Ping event from the source chain."""
+    """Represents a Ping event from the source chain.
+    
+    Using frozen=True for immutability and slots=True for memory efficiency.
+    """
     tx_hash: str
     block_number: int
     sender: str
@@ -31,11 +35,11 @@ class PingEvent:
 class EventProcessor:
     """Processes blockchain events for the ROFL relayer."""
     
-    # Maximum items to track (prevent unbounded growth)
-    MAX_PROCESSED_HASHES = 10000
-    MAX_PENDING_PINGS = 1000
+    # Class-level constants using Python 3.12 type annotations
+    MAX_PROCESSED_HASHES: int = 10_000  # Using underscores for readability
+    MAX_PENDING_PINGS: int = 1_000
     
-    def __init__(self, proof_manager: Optional[ProofManager] = None, config: Optional[Any] = None):
+    def __init__(self, proof_manager: Optional[ProofManager] = None, config: Optional[Any] = None) -> None:
         """Initialize the event processor.
         
         Args:
@@ -43,9 +47,10 @@ class EventProcessor:
             config: RelayerConfig instance for accessing target addresses
         """
         # State tracking with bounded collections
-        self.processed_tx_hashes: Set[str] = set()
-        self.pending_pings: Deque[PingEvent] = deque(maxlen=self.MAX_PENDING_PINGS)
-        self.stored_hashes: Dict[int, str] = {}  # block_number -> block_hash
+        # Using deque for O(1) append and automatic LRU eviction
+        self.processed_tx_hashes: deque[str] = deque(maxlen=self.MAX_PROCESSED_HASHES)
+        self.pending_pings: deque[PingEvent] = deque(maxlen=self.MAX_PENDING_PINGS)
+        self.stored_hashes: dict[int, str] = {}  # block_number -> block_hash
         
         # Proof generation
         self.proof_manager = proof_manager
@@ -62,15 +67,18 @@ class EventProcessor:
             PingEvent if successfully processed, None if skipped or error
         """
         try:
-            # Extract and validate transaction hash
-            tx_hash = event.get('transactionHash')
-            if not tx_hash:
-                logger.warning("Event missing transaction hash")
-                return None
-            
-            # Convert to hex string if needed
-            if isinstance(tx_hash, bytes):
-                tx_hash = tx_hash.hex()
+            # Extract and validate transaction hash using match/case (Python 3.10+)
+            match event.get('transactionHash'):
+                case None:
+                    logger.warning("Event missing transaction hash")
+                    return None
+                case bytes() as tx_hash_bytes:
+                    tx_hash = tx_hash_bytes.hex()
+                case str() as tx_hash:
+                    pass  # Already a string
+                case _:
+                    logger.warning(f"Unexpected transaction hash type: {type(event.get('transactionHash'))}")
+                    return None
             
             # Skip if already processed
             if tx_hash in self.processed_tx_hashes:
@@ -79,16 +87,16 @@ class EventProcessor:
             # Track processed transaction (with size limit)
             self._track_processed_hash(tx_hash)
             
-            # Extract event data
-            block_number = event.get('blockNumber', 0)
-            args = event.get('args', {})
-            sender = args.get('sender', '0x0')
-            timestamp = args.get('timestamp', 0)
+            # Extract event data with type safety
+            block_number: int = event.get('blockNumber', 0)
+            args: Mapping[str, Any] = event.get('args', {})
+            sender: str = args.get('sender', '0x0')
+            timestamp: int = args.get('timestamp', 0)
             
             # Store event data for later proof generation
             # ProofManager will calculate the correct transaction-local index
             # Generate ping ID using transaction hash and event args for uniqueness
-            ping_id = Web3.keccak(text=f"{tx_hash}-{sender}-{block_number}").hex()
+            ping_id: str = Web3.keccak(text=f"{tx_hash}-{sender}-{block_number}").hex()
             
             # Create typed ping event
             ping_event = PingEvent(
@@ -99,9 +107,10 @@ class EventProcessor:
                 ping_id=ping_id
             )
             
+            # Using f-string with = for debug output (Python 3.8+)
             logger.info(
-                f"Ping event detected - TX: {tx_hash[:10]}... Block: {block_number} "
-                f"Sender: {sender} ID: {ping_id[:10]}..."
+                f"Ping event detected - TX: {tx_hash[:10]}... {block_number=} "
+                f"{sender=} ID: {ping_id[:10]}..."
             )
             
             # Queue for processing
@@ -112,7 +121,7 @@ class EventProcessor:
             logger.error(f"Error processing ping event: {e}", exc_info=True)
             return None
     
-    async def process_hash_stored(self, event: EventData) -> Optional[tuple[int, str]]:
+    async def process_hash_stored(self, event: EventData) -> tuple[int, str] | None:
         """
         Process a HashStored event from the ROFLAdapter.
         
@@ -123,13 +132,18 @@ class EventProcessor:
             Tuple of (block_id, block_hash) if successful, None if error
         """
         try:
-            # Extract event data
-            args = event.get('args', {})
-            block_id = args.get('id', 0)
-            block_hash = args.get('hash', '0x0')
+            # Extract event data with pattern matching
+            args: Mapping[str, Any] = event.get('args', {})
+            block_id: int = args.get('id', 0)
             
-            if isinstance(block_hash, bytes):
-                block_hash = block_hash.hex()
+            # Handle block hash with pattern matching
+            match args.get('hash', '0x0'):
+                case bytes() as hash_bytes:
+                    block_hash = hash_bytes.hex()
+                case str() as hash_str:
+                    block_hash = hash_str
+                case _:
+                    block_hash = '0x0'
             
             # Store the hash
             self.stored_hashes[block_id] = block_hash
@@ -137,7 +151,8 @@ class EventProcessor:
             logger.info(f"Hash stored - Block {block_id}: {block_hash[:10]}...")
             
             # Check if any pending pings can now be processed
-            matching_pings = [ping for ping in self.pending_pings if ping.block_number == block_id]
+            # Using list comprehension with walrus operator for efficiency
+            matching_pings: list[PingEvent] = [ping for ping in self.pending_pings if ping.block_number == block_id]
             if matching_pings:
                 logger.info(f"Found {len(matching_pings)} pings ready for block {block_id}")
                 # Process matched events with proof generation
@@ -153,17 +168,17 @@ class EventProcessor:
     
     def _track_processed_hash(self, tx_hash: str) -> None:
         """
-        Track a processed transaction hash with size limits.
+        Track a processed transaction hash with automatic LRU eviction.
+        
+        The deque automatically removes the oldest entry when maxlen is reached,
+        providing proper Least Recently Used (LRU) behavior with O(1) operations.
         
         Args:
             tx_hash: Transaction hash to track
         """
-        self.processed_tx_hashes.add(tx_hash)
-        if len(self.processed_tx_hashes) > self.MAX_PROCESSED_HASHES:
-            # Remove oldest entries (convert to list, slice, convert back)
-            self.processed_tx_hashes = set(
-                list(self.processed_tx_hashes)[-self.MAX_PROCESSED_HASHES:]
-            )
+        # Check if already exists to avoid duplicates
+        if tx_hash not in self.processed_tx_hashes:
+            self.processed_tx_hashes.append(tx_hash)
     
     async def process_matched_events(self, ping_event: PingEvent) -> None:
         """

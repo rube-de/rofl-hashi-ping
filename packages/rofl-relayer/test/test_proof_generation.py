@@ -9,6 +9,7 @@ import asyncio
 import json
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 # Add parent directory to path for imports
@@ -17,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from web3 import Web3
 from src.rofl_relayer.proof_manager import ProofManager
 from src.rofl_relayer.utils.contract_utility import ContractUtility
+from src.rofl_relayer.event_processor import PingEvent
 
 
 async def test_proof_matches_typescript():
@@ -94,11 +96,20 @@ async def test_proof_matches_typescript():
         rofl_util=None  # Testing without ROFL
     )
     
-    # Generate proof with new signature
+    # Create PingEvent object for proof generation
+    ping_event = PingEvent(
+        tx_hash=tx_hash,
+        block_number=event_block_number,
+        sender=sender,
+        timestamp=receipt['blockNumber'],  # Using block number as timestamp for testing
+        ping_id=f"ping_{tx_hash[:8]}"  # Generate a test ping_id
+    )
+    
+    # Generate proof with PingEvent object
     print(f"\n🔮 Generating proof for transaction {tx_hash}")
     print(f"   Using sender: {sender}, block: {event_block_number}")
     try:
-        python_proof = await proof_manager.generate_proof(tx_hash, sender, event_block_number)
+        python_proof = await proof_manager.generate_proof(ping_event)
         print("✅ Proof generated successfully")
     except Exception as e:
         print(f"❌ Failed to generate proof: {e}")
@@ -211,12 +222,23 @@ async def test_proof_generation_errors():
         
     # Initialize ProofManager
     contract_util = ContractUtility()
-    proof_manager = ProofManager(web3_source, contract_util)
+    proof_manager = ProofManager(
+        w3_source=web3_source,
+        contract_util=contract_util,
+        rofl_util=None  # Testing without ROFL
+    )
     
     # Test with invalid transaction hash
     print("\n📍 Testing with invalid transaction hash...")
     try:
-        await proof_manager.generate_proof("0xinvalid", 0)
+        invalid_event = PingEvent(
+            tx_hash="0xinvalid",
+            block_number=0,
+            sender="0x0000000000000000000000000000000000000000",
+            timestamp=0,
+            ping_id="invalid"
+        )
+        await proof_manager.generate_proof(invalid_event)
         print("❌ Should have raised an error for invalid hash")
     except Exception as e:
         print(f"✅ Correctly raised error: {type(e).__name__}")
@@ -225,7 +247,14 @@ async def test_proof_generation_errors():
     print("\n📍 Testing with non-existent transaction...")
     try:
         fake_hash = "0x" + "0" * 64
-        await proof_manager.generate_proof(fake_hash, 0)
+        fake_event = PingEvent(
+            tx_hash=fake_hash,
+            block_number=0,
+            sender="0x0000000000000000000000000000000000000000",
+            timestamp=0,
+            ping_id="fake"
+        )
+        await proof_manager.generate_proof(fake_event)
         print("❌ Should have raised an error for non-existent tx")
     except Exception as e:
         print(f"✅ Correctly raised error: {type(e).__name__}")

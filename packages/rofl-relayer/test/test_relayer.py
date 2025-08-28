@@ -61,6 +61,7 @@ async def test_relayer_with_real_contracts():
     
     # Set up environment with real contract addresses
     os.environ["SOURCE_RPC_URL"] = "https://ethereum-sepolia.publicnode.com"
+    os.environ["TARGET_RPC_URL"] = "https://testnet.sapphire.oasis.io"
     os.environ["PING_SENDER_ADDRESS"] = "0xDCC23A03E6b6aA254cA5B0be942dD5CafC9A2299"
     os.environ["PING_RECEIVER_ADDRESS"] = "0x1f54b7AF3A462aABed01D5910a3e5911e76D4B51"
     os.environ["ROFL_ADAPTER_ADDRESS"] = "0x9f983F759d511D0f404582b0bdc1994edb5db856"
@@ -71,8 +72,8 @@ async def test_relayer_with_real_contracts():
     print("\nNote: Looking back 100 blocks for any recent Ping events...")
     print("To generate events, run: bunx hardhat send-ping --network eth-sepolia")
     
-    # Create relayer instance
-    relayer = ROFLRelayer(local_mode=True)
+    # Create relayer instance using factory method
+    relayer = ROFLRelayer.from_env(local_mode=True)
     
     # Run for a longer time to see if we catch any events
     print("\nRunning for 10 seconds to check for events...")
@@ -93,9 +94,11 @@ async def test_relayer_with_real_contracts():
     assert relayer.hash_listener is not None
     
     print("\n[PASS] ROFL Relayer initialized and ran successfully")
-    print(f"   - Processed TX hashes: {len(relayer.processed_tx_hashes)}")
-    print(f"   - Pending pings: {len(relayer.pending_pings)}")
-    print(f"   - Stored hashes: {len(relayer.stored_hashes)}")
+    # Get stats from the event processor
+    stats = relayer.event_processor.get_stats()
+    print(f"   - Pending pings: {stats['pending_pings']}")
+    print(f"   - Processed hashes: {stats['processed_hashes']}")
+    print(f"   - Stored hashes: {stats['stored_hashes']}")
     
     return True
 
