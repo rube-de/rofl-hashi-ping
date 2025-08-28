@@ -73,7 +73,6 @@ class ProofManager:
         for i, log in enumerate(receipt['logs']):
             topics = log.get('topics', [])
             if len(topics) >= 3:
-                # Check if this is our Ping event
                 if (topics[0] == ping_topic and
                     topics[1] == sender_topic and
                     topics[2] == block_topic):
@@ -184,7 +183,6 @@ class ProofManager:
         """
         logger.info(f"Submitting proof to PingReceiver at {receiver_address}")
         
-        # Get the contract instance
         abi = self.contract_util.get_contract_abi("PingReceiver")
         contract = self.contract_util.w3.eth.contract(
             address=Web3.to_checksum_address(receiver_address),
@@ -192,8 +190,6 @@ class ProofManager:
         )
         
         # Convert proof array to struct format expected by PingReceiver
-        # The proof array has 8 elements: [chainId, blockNumber, blockHeader, ancestralBlockNumber, 
-        # ancestralBlockHeaders, receiptProof, transactionIndex, logIndex]
         receipt_proof_struct = {
             'chainId': proof[0],
             'blockNumber': proof[1],
@@ -224,7 +220,7 @@ class ProofManager:
                 logger.error("Failed to submit proof via ROFL")
                 raise Exception("ROFL submission failed")
         else:
-            # Local mode: use transact() directly 
+            # Local mode
             tx_hash = contract.functions.receivePing(receipt_proof_struct).transact({
                 'gas': 3000000,
                 'gasPrice': self.contract_util.w3.eth.gas_price

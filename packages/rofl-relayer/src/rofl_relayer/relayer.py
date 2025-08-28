@@ -48,10 +48,8 @@ class ROFLRelayer:
         self.config = config
         self.running = False
         
-        # Initialize utilities
         self._init_utilities()
         
-        # Initialize components
         self.event_processor = EventProcessor(
             proof_manager=self.proof_manager,
             config=config
@@ -59,7 +57,6 @@ class ROFLRelayer:
         self.ping_listener: Optional[PollingEventListener] = None
         self.hash_listener: Optional[PollingEventListener] = None
         
-        # Async coordination
         self.shutdown_event = asyncio.Event()
     
     def _init_utilities(self) -> None:
@@ -75,10 +72,8 @@ class ROFLRelayer:
             secret=self.config.target_chain.private_key if self.config.local_mode else ""
         )
         
-        # Initialize ROFL utility if not in local mode
         self.rofl_util = None if self.config.local_mode else RoflUtility()
         
-        # Initialize ProofManager
         self.proof_manager = ProofManager(
             w3_source=self.w3_source,
             contract_util=self.contract_util,
@@ -150,7 +145,7 @@ class ROFLRelayer:
     async def _check_task_health(self, tasks: dict[str, asyncio.Task]) -> bool:
         """Check if any critical task has failed."""
         for name, task in tasks.items():
-            if task.done() and name != "status":  # status task can end normally
+            if task.done() and name != "status":
                 try:
                     await task
                 except Exception as e:
@@ -173,7 +168,7 @@ class ROFLRelayer:
                 try:
                     await task
                 except asyncio.CancelledError:
-                    pass  # Expected when cancelling
+                    pass
     
     async def run(self) -> None:
         """Main event loop for the relayer service."""
@@ -190,7 +185,6 @@ class ROFLRelayer:
             if not self.ping_listener or not self.hash_listener:
                 raise RuntimeError("Event listeners not properly initialized")
             
-            # Start all async tasks inline - clear what's being monitored
             tasks = {
                 "ping": asyncio.create_task(
                     self.ping_listener.start_polling(
@@ -211,7 +205,6 @@ class ROFLRelayer:
             
             # Wait until shutdown or task failure
             while self.running:
-                # Check for shutdown signal
                 try:
                     await asyncio.wait_for(self.shutdown_event.wait(), timeout=1.0)
                     break  # Shutdown requested

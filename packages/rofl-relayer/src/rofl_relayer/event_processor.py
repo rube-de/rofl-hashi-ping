@@ -35,8 +35,7 @@ class PingEvent:
 class EventProcessor:
     """Processes blockchain events for the ROFL relayer."""
     
-    # Class-level constants using Python 3.12 type annotations
-    MAX_PROCESSED_HASHES: int = 10_000  # Using underscores for readability
+    MAX_PROCESSED_HASHES: int = 10_000
     MAX_PENDING_PINGS: int = 1_000
     
     def __init__(self, proof_manager: Optional[ProofManager] = None, config: Optional[Any] = None) -> None:
@@ -93,8 +92,6 @@ class EventProcessor:
             sender: str = args.get('sender', '0x0')
             timestamp: int = args.get('timestamp', 0)
             
-            # Store event data for later proof generation
-            # ProofManager will calculate the correct transaction-local index
             # Generate ping ID using transaction hash and event args for uniqueness
             ping_id: str = Web3.keccak(text=f"{tx_hash}-{sender}-{block_number}").hex()
             
@@ -107,7 +104,6 @@ class EventProcessor:
                 ping_id=ping_id
             )
             
-            # Using f-string with = for debug output (Python 3.8+)
             logger.info(
                 f"Ping event detected - TX: {tx_hash[:10]}... {block_number=} "
                 f"{sender=} ID: {ping_id[:10]}..."
@@ -151,7 +147,6 @@ class EventProcessor:
             logger.info(f"Hash stored - Block {block_id}: {block_hash[:10]}...")
             
             # Check if any pending pings can now be processed
-            # Using list comprehension with walrus operator for efficiency
             matching_pings: list[PingEvent] = [ping for ping in self.pending_pings if ping.block_number == block_id]
             if matching_pings:
                 logger.info(f"Found {len(matching_pings)} pings ready for block {block_id}")
