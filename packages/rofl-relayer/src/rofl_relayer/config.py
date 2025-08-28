@@ -7,6 +7,7 @@ that monitors Ping events on Ethereum and relays them to Oasis Sapphire.
 
 import os
 from dataclasses import dataclass, field
+from typing import Optional
 
 
 @dataclass
@@ -22,7 +23,7 @@ class TargetChainConfig:
     rpc_url: str
     ping_receiver_address: str
     rofl_adapter_address: str
-    private_key: str
+    private_key: Optional[str]
 
 
 @dataclass
@@ -96,8 +97,7 @@ class RelayerConfig:
         private_key = os.environ.get("PRIVATE_KEY")
         if not private_key:
             if not local_mode:
-                # In ROFL mode, private key might be managed differently
-                private_key = "0x" + "0" * 64  # Placeholder for ROFL mode
+                private_key = None
             else:
                 raise ValueError(
                     "PRIVATE_KEY environment variable is required in local mode. "

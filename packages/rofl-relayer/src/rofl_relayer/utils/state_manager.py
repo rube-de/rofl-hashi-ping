@@ -6,7 +6,7 @@ utilities for managing processed transactions and pending events.
 """
 
 from collections import OrderedDict, deque
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 
 from ..models import PingEvent
 
@@ -133,14 +133,14 @@ class RelayerStateManager:
         """
         return self._stored_hashes.get(block_number)
     
-    def get_all_pending_pings(self) -> deque[PingEvent]:
+    def get_all_pending_pings(self) -> List[PingEvent]:
         """
-        Get the underlying deque of all pending pings.
+        Get a copy of all pending ping events.
         
         Returns:
-            Deque containing all pending ping events
+            List containing all pending ping events
         """
-        return self._pending_pings
+        return list(self._pending_pings)
     
     def get_stats(self) -> dict:
         """

@@ -125,9 +125,9 @@ class ProofManager:
         trie = HexaryTrie({})
         
         for _idx, rec in enumerate(receipts):
-            # RLP encode transaction index as trie key (index 0 encodes to empty bytes per Ethereum spec)
+            # Encode transaction index as trie key
             tx_index = rec['transactionIndex']
-            key = rlp.encode(b'') if tx_index == 0 else rlp.encode(tx_index)
+            key = BlockchainEncoder.encode_transaction_index(tx_index)
             
             # Encode the receipt
             encoded_receipt = BlockchainEncoder.encode_receipt(rec)
@@ -143,9 +143,8 @@ class ProofManager:
             raise ValueError(f"Trie root mismatch! Calculated: {calculated_root}, Block: {block_receipts_root}")
             
         # 5. Generate proof for target receipt
-        # RLP encode transaction index (index 0 encodes to empty bytes per Ethereum spec)
         tx_index = receipt['transactionIndex']
-        receipt_key = rlp.encode(b'') if tx_index == 0 else rlp.encode(tx_index)
+        receipt_key = BlockchainEncoder.encode_transaction_index(tx_index)
         proof_nodes = trie.get_proof(receipt_key)
         
         # Convert proof nodes to hex strings
@@ -254,8 +253,25 @@ class ProofManager:
             
         Returns:
             List of transaction receipts
+            
+        Raises:
+            ValueError: If block receipts cannot be fetched
         """
-        receipts = self.w3_source.eth.get_block_receipts(block_number)
-        logger.info(f"Fetched {len(receipts)} receipts from block {block_number}")
+        try:
+            receipts = self.w3_source.eth.get_block_receipts(block_number)
+        except Exception as e:
+            logger.error(f"Failed to fetch receipts for block {block_number}: {e}")
+            raise ValueError(f"Failed to fetch receipts for block {block_number}") from e
+            
+        if receipts is None:
+            logger.error(f"get_block_receipts returned None for block {block_number}")
+            raise ValueError(f"Block receipts unavailable for block {block_number}")
+            
+        # Empty receipts list is valid (e.g., empty blocks) but worth logging
+        if not receipts:
+            logger.warning(f"Block {block_number} contains no receipts (empty block)")
+        else:
+            logger.info(f"Fetched {len(receipts)} receipts from block {block_number}")
+            
         return receipts
     

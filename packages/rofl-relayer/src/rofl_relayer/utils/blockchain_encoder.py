@@ -37,6 +37,25 @@ class BlockchainEncoder:
             return Web3.to_bytes(hexstr=value)
     
     @staticmethod
+    def encode_transaction_index(tx_index: int) -> bytes:
+        """
+        Encode a transaction index according to Ethereum RLP rules.
+        
+        Special case: Transaction index 0 encodes to empty bytes per Ethereum spec.
+        All other indices encode normally as integers.
+        
+        Args:
+            tx_index: Transaction index to encode
+            
+        Returns:
+            RLP-encoded transaction index
+        """
+        if tx_index == 0:
+            return rlp.encode(b'')
+        else:
+            return rlp.encode(tx_index)
+    
+    @staticmethod
     def encode_receipt(receipt: TxReceipt) -> bytes:
         """
         RLP encode a transaction receipt with proper type handling.

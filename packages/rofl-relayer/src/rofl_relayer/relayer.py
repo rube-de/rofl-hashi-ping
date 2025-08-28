@@ -69,7 +69,7 @@ class ROFLRelayer:
         # Initialize contract utility for target chain
         self.contract_util = ContractUtility(
             rpc_url=self.config.target_chain.rpc_url,
-            secret=self.config.target_chain.private_key if self.config.local_mode else ""
+            secret=self.config.target_chain.private_key or ""
         )
         
         self.rofl_util = None if self.config.local_mode else RoflUtility()

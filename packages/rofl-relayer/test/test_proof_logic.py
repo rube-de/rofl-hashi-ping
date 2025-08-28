@@ -15,29 +15,30 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.rofl_relayer.proof_manager import ProofManager
+from src.rofl_relayer.utils.blockchain_encoder import BlockchainEncoder
 
 
 def test_rlp_encoding():
     """Test RLP encoding logic matches expected format."""
     print("🧪 Testing RLP encoding logic")
     
-    # Test transaction index encoding (now testing the inline logic)
+    # Test transaction index encoding
     print("\n📍 Testing transaction index encoding:")
     
-    # Index 0 should encode to empty RLP (per Ethereum spec)
-    index_0 = rlp.encode(b'') if 0 == 0 else rlp.encode(0)
+    # Index 0 has special encoding (empty bytes)
+    index_0 = BlockchainEncoder.encode_transaction_index(0)
     expected_0 = rlp.encode(b'')
     assert index_0 == expected_0, f"Index 0 encoding mismatch"
-    print(f"✅ Index 0: {Web3.to_hex(index_0)}")
+    print(f"✅ Index 0: {Web3.to_hex(index_0)} (special case: empty bytes)")
     
-    # Non-zero indices
-    index_1 = rlp.encode(b'') if 1 == 0 else rlp.encode(1)
+    # Non-zero indices encode normally
+    index_1 = BlockchainEncoder.encode_transaction_index(1)
     expected_1 = rlp.encode(1)
     assert index_1 == expected_1, f"Index 1 encoding mismatch"
     print(f"✅ Index 1: {Web3.to_hex(index_1)}")
     
     # Index 137 (0x89 from proof.json)
-    index_137 = rlp.encode(b'') if 137 == 0 else rlp.encode(137)
+    index_137 = BlockchainEncoder.encode_transaction_index(137)
     expected_137 = rlp.encode(137)
     assert index_137 == expected_137, f"Index 137 encoding mismatch"
     print(f"✅ Index 137: {Web3.to_hex(index_137)}")
@@ -63,8 +64,6 @@ def test_receipt_encoding_structure():
     """Test receipt encoding structure for different transaction types."""
     print("\n🧪 Testing receipt encoding structure")
     
-    proof_manager = ProofManager(None, None, None)
-    
     # Create a mock legacy receipt (Type 0)
     legacy_receipt = {
         'status': 1,
@@ -74,8 +73,8 @@ def test_receipt_encoding_structure():
         'type': 0
     }
     
-    # Encode legacy receipt
-    encoded_legacy = proof_manager._encode_receipt(legacy_receipt)
+    # Encode legacy receipt using BlockchainEncoder
+    encoded_legacy = BlockchainEncoder.encode_receipt(legacy_receipt)
     
     # Legacy receipts should NOT have a type prefix
     assert encoded_legacy[0] != 0, "Legacy receipt should not have type prefix"
@@ -90,8 +89,8 @@ def test_receipt_encoding_structure():
         'type': 2
     }
     
-    # Encode EIP-1559 receipt
-    encoded_eip1559 = proof_manager._encode_receipt(eip1559_receipt)
+    # Encode EIP-1559 receipt using BlockchainEncoder
+    encoded_eip1559 = BlockchainEncoder.encode_receipt(eip1559_receipt)
     
     # EIP-1559 receipts should have type 2 prefix
     assert encoded_eip1559[0] == 2, "EIP-1559 receipt should have type 2 prefix"

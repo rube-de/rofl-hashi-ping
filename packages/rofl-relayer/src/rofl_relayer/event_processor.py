@@ -36,8 +36,9 @@ class EventProcessor:
             config: RelayerConfig instance for accessing target addresses
         """
         # State tracking with bounded collections
-        # Using deque for O(1) append and automatic LRU eviction
-        self.processed_tx_hashes: deque[str] = deque(maxlen=self.MAX_PROCESSED_HASHES)
+        # Hybrid approach: deque for LRU eviction + set for O(1) lookups
+        self.processed_tx_hashes_deque: deque[str] = deque(maxlen=self.MAX_PROCESSED_HASHES)
+        self.processed_tx_hashes_set: set[str] = set()
         self.pending_pings: deque[PingEvent] = deque(maxlen=self.MAX_PENDING_PINGS)
         self.stored_hashes: dict[int, str] = {}  # block_number -> block_hash
         
@@ -69,8 +70,8 @@ class EventProcessor:
                     logger.warning(f"Unexpected transaction hash type: {type(event.get('transactionHash'))}")
                     return None
             
-            # Skip if already processed
-            if tx_hash in self.processed_tx_hashes:
+            # Skip if already processed (O(1) set lookup)
+            if tx_hash in self.processed_tx_hashes_set:
                 return None
             
             # Track processed transaction (with size limit)
@@ -155,15 +156,24 @@ class EventProcessor:
         """
         Track a processed transaction hash with automatic LRU eviction.
         
-        The deque automatically removes the oldest entry when maxlen is reached,
-        providing proper Least Recently Used (LRU) behavior with O(1) operations.
+        Uses a hybrid approach: set for O(1) lookups and deque for LRU behavior.
+        When the deque reaches maxlen, it automatically removes the oldest entry,
+        and we sync by removing it from the set as well.
         
         Args:
             tx_hash: Transaction hash to track
         """
-        # Check if already exists to avoid duplicates
-        if tx_hash not in self.processed_tx_hashes:
-            self.processed_tx_hashes.append(tx_hash)
+        # Check if already exists to avoid duplicates (O(1) set lookup)
+        if tx_hash not in self.processed_tx_hashes_set:
+            # Check if deque is at capacity (will trigger eviction)
+            if len(self.processed_tx_hashes_deque) == self.MAX_PROCESSED_HASHES:
+                # The oldest hash is at index 0 (left side)
+                oldest_hash = self.processed_tx_hashes_deque[0]
+                self.processed_tx_hashes_set.discard(oldest_hash)
+            
+            # Add to both structures
+            self.processed_tx_hashes_deque.append(tx_hash)
+            self.processed_tx_hashes_set.add(tx_hash)
     
     async def process_matched_events(self, ping_event: PingEvent) -> None:
         """
@@ -203,7 +213,7 @@ class EventProcessor:
             Dictionary with current state metrics
         """
         return {
-            'processed_hashes': len(self.processed_tx_hashes),
+            'processed_hashes': len(self.processed_tx_hashes_set),
             'pending_pings': len(self.pending_pings),
             'stored_hashes': len(self.stored_hashes)
         }
