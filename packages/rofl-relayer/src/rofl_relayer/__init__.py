@@ -5,7 +5,8 @@ Automated cross-chain message relay service for the Hashi bridge.
 """
 
 from .config import RelayerConfig
-from .event_processor import EventProcessor, PingEvent
+from .event_processor import EventProcessor
+from .models import PingEvent
 from .relayer import ROFLRelayer
 
 __all__ = ["RelayerConfig", "ROFLRelayer", "EventProcessor", "PingEvent"]

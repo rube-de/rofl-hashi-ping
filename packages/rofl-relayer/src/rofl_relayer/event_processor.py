@@ -7,29 +7,19 @@ keeping the processing logic separate from the relay orchestration.
 
 import logging
 from collections import deque
-from dataclasses import dataclass
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 from collections.abc import Mapping
 
 from web3.types import EventData
 from web3 import Web3
 
+from .models import PingEvent
 from .proof_manager import ProofManager
 
+if TYPE_CHECKING:
+    from .config import RelayerConfig
+
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True, slots=True)
-class PingEvent:
-    """Represents a Ping event from the source chain.
-    
-    Using frozen=True for immutability and slots=True for memory efficiency.
-    """
-    tx_hash: str
-    block_number: int
-    sender: str
-    timestamp: int
-    ping_id: str
 
 
 class EventProcessor:
@@ -38,7 +28,7 @@ class EventProcessor:
     MAX_PROCESSED_HASHES: int = 10_000
     MAX_PENDING_PINGS: int = 1_000
     
-    def __init__(self, proof_manager: Optional[ProofManager] = None, config: Optional[Any] = None) -> None:
+    def __init__(self, proof_manager: ProofManager | None = None, config: Optional["RelayerConfig"] = None) -> None:
         """Initialize the event processor.
         
         Args:

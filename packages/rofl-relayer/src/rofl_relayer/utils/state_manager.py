@@ -6,18 +6,9 @@ utilities for managing processed transactions and pending events.
 """
 
 from collections import OrderedDict, deque
-from dataclasses import dataclass
 from typing import Dict, List, Optional, Set
 
-
-@dataclass
-class PingEvent:
-    """Represents a Ping event from the source chain."""
-    tx_hash: str
-    block_number: int
-    sender: str
-    timestamp: int
-    ping_id: str
+from ..models import PingEvent
 
 
 class RelayerStateManager:

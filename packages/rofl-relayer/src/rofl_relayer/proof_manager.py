@@ -14,9 +14,11 @@ from web3 import Web3
 from web3.types import TxReceipt
 
 from .utils.blockchain_encoder import BlockchainEncoder
+from .models import PingEvent
 
 if TYPE_CHECKING:
-    from .event_processor import PingEvent
+    from .utils.contract_utility import ContractUtility
+    from .utils.rofl_utility import ROFLUtility
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +26,7 @@ logger = logging.getLogger(__name__)
 class ProofManager:
     """Handles proof generation and submission for cross-chain messages."""
     
-    def __init__(self, w3_source: Web3, contract_util: Any, rofl_util: Any | None = None):
+    def __init__(self, w3_source: Web3, contract_util: "ContractUtility", rofl_util: "ROFLUtility | None" = None):
         """
         Initialize the ProofManager.
         
@@ -37,7 +39,7 @@ class ProofManager:
         self.contract_util = contract_util
         self.rofl_util = rofl_util
         
-    def _get_transaction_local_index(self, ping_event: 'PingEvent') -> int:
+    def _get_transaction_local_index(self, ping_event: PingEvent) -> int:
         """
         Find the transaction-local index for a specific Ping event.
         
@@ -83,7 +85,7 @@ class ProofManager:
         logger.warning(f"Ping event not found in transaction logs, defaulting to index 0")
         return 0
     
-    async def generate_proof(self, ping_event: 'PingEvent') -> list[Any]:
+    async def generate_proof(self, ping_event: PingEvent) -> list[Any]:
         """
         Generate Hashi-format proof for a Ping event.
         
@@ -228,7 +230,7 @@ class ProofManager:
             logger.info(f"Proof submitted locally: {Web3.to_hex(tx_hash)}")
             return Web3.to_hex(tx_hash)
             
-    async def process_ping_event(self, ping_event: Any, receiver_address: str) -> str:
+    async def process_ping_event(self, ping_event: PingEvent, receiver_address: str) -> str:
         """
         Complete flow: generate and submit proof for a ping event.
         
