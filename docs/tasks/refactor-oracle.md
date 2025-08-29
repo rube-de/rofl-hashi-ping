@@ -96,32 +96,29 @@ This document provides a complete checklist of tasks for implementing the ROFL O
 
 ## Phase 4: Utility Improvements
 
-### 4.1. Update ContractUtility
-- [ ] Change from network-name to RPC URL initialization
-- [ ] Make secret parameter optional for read-only mode
-- [ ] Add `_add_signing_middleware()` method
-- [ ] Update `get_contract_abi()` path resolution
-- [ ] Add better error messages
-- [ ] Add contract address validation
-- [ ] Write tests for both modes (full and read-only)
-- [ ] Document usage patterns
+### 4.1. Update ContractUtility ✅
+- [x] Change from network-name to RPC URL initialization
+- [x] Make secret parameter optional for read-only mode
+- [x] Add `_add_signing_middleware()` method
+- [x] Update `get_contract_abi()` path resolution
+- [x] Add better error messages
+- [x] Add contract address validation
+- [x] Write tests for both modes (full and read-only)
+- [x] Document usage patterns
 
-### 4.2. Improve RoflUtility
-- [ ] Add comprehensive error messages
-- [ ] Implement retry logic with exponential backoff
-- [ ] Improve CBOR response handling
-- [ ] Add timeout configuration
-- [ ] Add connection pooling if applicable
-- [ ] Write tests for error conditions
-- [ ] Document ROFL interaction patterns
+### 4.2. Improve RoflUtility ✅
+- [x] Add comprehensive error messages
+- [x] ~~Implement retry logic with exponential backoff~~ (Not needed)
+- [x] Improve CBOR response handling
+- [x] Add timeout configuration
+- [x] ~~Add connection pooling if applicable~~ (Not applicable for socket connections)
+- [x] Write tests for error conditions
+- [x] Document ROFL interaction patterns
 
-### 4.3. State Management
-- [ ] Implement proper state tracking
-- [ ] Add state persistence (if needed)
-- [ ] Allow state recovery after restart
-- [ ] Implement metrics collection
-- [ ] Add health check endpoints
-- [ ] Document state management approach
+### 4.3. ~~State Management~~ (Removed - KISS Principle)
+**Note**: State management has been intentionally removed from the refactoring plan.
+Following the KISS principle, state tracking is kept inline within the EventProcessor 
+and BlockSubmitter classes where it's actually used, avoiding unnecessary abstraction.
 
 ## Phase 5: Code Modernization
 
@@ -283,15 +280,15 @@ This document provides a complete checklist of tasks for implementing the ROFL O
 | **Phase 1: Foundation** | 2 sections (1.1-1.2) | 19 tasks | Critical |
 | **Phase 2: Architecture** | 4 sections (2.1-2.4) | 33 tasks | High |
 | **Phase 3: Event System** | 2 sections (3.1-3.2) | 17 tasks | Critical |
-| **Phase 4: Utilities** | 3 sections (4.1-4.3) | 21 tasks | Medium |
+| **Phase 4: Utilities** | 2 sections (4.1-4.2) | 15 tasks | Medium |
 | **Phase 5: Modernization** | 3 sections (5.1-5.3) | 19 tasks | Low |
 | **Phase 6: Testing** | 3 sections (6.1-6.3) | 24 tasks | High |
 | **Phase 7: Migration** | 5 sections (7.1-7.5) | 33 tasks | High |
 | **Phase 8: Validation** | 3 sections (8.1-8.3) | 16 tasks | Medium |
 | **Phase 9: Post-Refactor** | 3 sections (9.1-9.3) | 15 tasks | Low |
 
-**Total Tasks**: 197  
-**Total Sections**: 28  
+**Total Tasks**: 191  
+**Total Sections**: 27  
 **Estimated Timeline**: 4 weeks
 
 ## Weekly Sprint Plan
@@ -307,7 +304,7 @@ This document provides a complete checklist of tasks for implementing the ROFL O
 
 ### Week 3: Complete Architecture
 - **Phase 2**: Sections 2.3-2.4 - Models & main class refactor
-- **Phase 4**: All sections (4.1-4.3) - Utility improvements
+- **Phase 4**: Sections 4.1-4.2 - Utility improvements (4.3 removed)
 - **Phase 6**: Section 6.2 - Unit tests
 
 ### Week 4: Polish & Deploy
@@ -340,10 +337,10 @@ This document provides a complete checklist of tasks for implementing the ROFL O
 
 ---
 
-*Document Version: 2.3*  
+*Document Version: 2.4*  
 *Last Updated: 2025-08-29*  
 *Owner: ROFL Oracle Team*  
-*Status: Phase 1 Complete, Phase 2 Complete, Phase 3 Complete (68/197 tasks)*
+*Status: Phase 1-4 Complete (78/191 tasks)*
 
 ### Quick Progress Tracker
 
@@ -351,7 +348,7 @@ This document provides a complete checklist of tasks for implementing the ROFL O
 Phase 1: [x] [x] (2/2 sections) ✅ COMPLETE
 Phase 2: [x] [x] [x] [x] (4/4 sections) ✅ COMPLETE
 Phase 3: [x] [x] (2/2 sections) ✅ COMPLETE
-Phase 4: [ ] [ ] [ ] (0/3 sections)
+Phase 4: [x] [x] (2/2 sections) ✅ COMPLETE - All tests and docs done
 Phase 5: [ ] [ ] [ ] (0/3 sections)
 Phase 6: [ ] [ ] [ ] (0/3 sections)
 Phase 7: [ ] [ ] [ ] [ ] [ ] (0/5 sections)
