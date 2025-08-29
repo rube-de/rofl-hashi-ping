@@ -6,7 +6,7 @@ on Oasis Sapphire, supporting both local (testing) and production (ROFL) modes.
 """
 
 import logging
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from web3 import Web3
 from web3.types import TxParams, Wei
@@ -42,8 +42,7 @@ class BlockSubmitter:
         self.source_chain_id = source_chain_id
         self.contract_address = Web3.to_checksum_address(contract_address)
         
-        # Load ABI and create contract instance
-        self.rofl_adapter_abi = self._load_rofl_adapter_abi()
+        self.rofl_adapter_abi = self.contract_util.get_contract_abi("ROFLAdapter")
         self.contract = self.contract_util.w3.eth.contract(
             address=self.contract_address,
             abi=self.rofl_adapter_abi
@@ -54,27 +53,6 @@ class BlockSubmitter:
         logger.info(f"BlockSubmitter initialized in {mode} mode")
         logger.info(f"  Source Chain ID: {source_chain_id}")
         logger.info(f"  ROFLAdapter Address: {contract_address}")
-    
-    def _load_rofl_adapter_abi(self) -> list[dict[str, Any]]:
-        """
-        Load the ROFLAdapter ABI.
-        
-        Returns:
-            Minimal ABI for the storeBlockHeader function
-        """
-        return [
-            {
-                "inputs": [
-                    {"name": "chainId", "type": "uint256"},
-                    {"name": "blockNumber", "type": "uint256"},
-                    {"name": "blockHash", "type": "bytes32"},
-                ],
-                "name": "storeBlockHeader",
-                "outputs": [],
-                "stateMutability": "nonpayable",
-                "type": "function",
-            }
-        ]
     
     async def submit_block_header(self, block_number: int, block_hash: str) -> bool:
         """
@@ -95,7 +73,6 @@ class BlockSubmitter:
             
             if self.rofl_util:
                 # Production mode: submit via ROFL
-                # Build transaction for ROFL (ROFL handles nonce, from address, and signing)
                 tx_params: TxParams = {
                     'from': '0x0000000000000000000000000000000000000000',  # ROFL will override
                     'gas': 300000,
@@ -122,11 +99,10 @@ class BlockSubmitter:
                     return False
                     
             else:
-                # Local mode: submit directly using transact()
+                # Local mode
                 logger.info("🔧 LOCAL MODE: Submitting transaction directly")
                 
                 try:
-                    # Use transact() for local mode - this sends a real transaction
                     tx_hash = self.contract.functions.storeBlockHeader(
                         self.source_chain_id,
                         block_number,

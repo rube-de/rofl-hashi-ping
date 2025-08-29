@@ -7,7 +7,6 @@ from web3.types import BlockData
 from .block_submitter import BlockSubmitter
 from .config import OracleConfig
 from .event_processor import EventProcessor
-from .models import BlockHeaderEvent
 from .utils.contract_utility import ContractUtility
 from .utils.event_listener_utility import EventListenerUtility
 from .utils.rofl_utility import RoflUtility
@@ -73,18 +72,10 @@ class HeaderOracle:
             self.config = self.config.with_chain_id(chain_id)
             self.source_chain_id = chain_id
 
-            # Load ABIs
-            logger.info("Loading contract ABIs...")
-            self.rofl_adapter_abi = self._load_rofl_adapter_abi()
-            self.block_requester_abi = self._load_block_requester_abi()
-            logger.info("ABIs loaded")
-
-            # Create ROFL adapter contract instance (for Sapphire)
-            logger.info("Creating ROFL adapter contract instance...")
-            self.contract = self.contract_utility.w3.eth.contract(
-                address=config.target_chain.contract_address, abi=self.rofl_adapter_abi
-            )
-            logger.info("Contract instance created")
+            # Load BlockHeaderRequester ABI for event listening
+            logger.info("Loading BlockHeaderRequester ABI...")
+            self.block_requester_abi = self.contract_utility.get_contract_abi("BlockHeaderRequester")
+            logger.info("ABI loaded")
             
             # Create source chain contract instance (for event listening)
             logger.info("Creating source chain contract instance...")
@@ -135,45 +126,6 @@ class HeaderOracle:
             logger.error(f"Exception type: {type(e).__name__}", exc_info=True)
             raise
 
-
-    def _load_rofl_adapter_abi(self) -> list[dict[str, Any]]:
-        """
-        Load the ROFLAdapter ABI.
-        For now, we'll define it inline based on the contract interface.
-        """
-        # Minimal ABI for the storeBlockHeader function
-        return [
-            {
-                "inputs": [
-                    {"name": "chainId", "type": "uint256"},
-                    {"name": "blockNumber", "type": "uint256"},
-                    {"name": "blockHash", "type": "bytes32"},
-                ],
-                "name": "storeBlockHeader",
-                "outputs": [],
-                "stateMutability": "nonpayable",
-                "type": "function",
-            }
-        ]
-    
-    def _load_block_requester_abi(self) -> list[dict[str, Any]]:
-        """
-        Load the BlockHeaderRequester ABI.
-        Only includes the event we need to listen for.
-        """
-        return [
-            {
-                "anonymous": False,
-                "inputs": [
-                    {"indexed": True, "internalType": "uint256", "name": "chainId", "type": "uint256"},
-                    {"indexed": True, "internalType": "uint256", "name": "blockNumber", "type": "uint256"},
-                    {"indexed": False, "internalType": "address", "name": "requester", "type": "address"},
-                    {"indexed": False, "internalType": "bytes32", "name": "context", "type": "bytes32"}
-                ],
-                "name": "BlockHeaderRequested",
-                "type": "event"
-            }
-        ]
 
     def fetch_block_by_number(self, block_number: int) -> BlockData | None:
         """
@@ -241,6 +193,12 @@ class HeaderOracle:
                 
         except Exception as e:
             logger.error(f"Error processing BlockHeaderRequested event: {e}", exc_info=True)
+    
+    async def shutdown(self) -> None:
+        """Gracefully shutdown the oracle."""
+        logger.info("Shutting down HeaderOracle...")
+        await self.event_listener.stop()
+        logger.info("HeaderOracle shutdown complete")
 
     async def run(self) -> None:
         """
