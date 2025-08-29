@@ -10,48 +10,57 @@ from web3.middleware import SignAndSendRawMiddlewareBuilder
 
 class ContractUtility:
     """
-    Initializes the ContractUtility class.
-
-    :param network_name: Name of the network to connect to
-    :type network_name: str
-    :return: None
+    Utility for contract interaction and ABI loading.
+    
+    Can be used in two modes:
+    1. Full mode: Initialize with RPC URL and secret for signing transactions
+    2. Read-only mode: Initialize with RPC URL only for building unsigned transactions
     """
 
-    def __init__(self, network_name: str, secret: str):
-        networks = {
-            "sapphire": "https://sapphire.oasis.io",
-            "sapphire-testnet": "https://testnet.sapphire.oasis.io",
-            "sapphire-localnet": "http://localhost:8545",
-        }
-        self.network = networks.get(network_name, network_name)
-        self.w3 = self.setup_web3_middleware(secret)
+    def __init__(self, rpc_url: str, secret: str = ""):
+        """
+        Initialize the ContractUtility.
+        
+        Args:
+            rpc_url: RPC URL for the network (required)
+            secret: Private key for signing transactions (optional - if not provided, read-only mode)
+        """
+        if not rpc_url:
+            raise ValueError("RPC URL is required")
+            
+        self.rpc_url = rpc_url
+        
+        # Always create Web3 instance with RPC
+        self.w3 = Web3(Web3.HTTPProvider(self.rpc_url))
+        
+        # Add signing middleware only if secret is provided
+        if secret:
+            self._add_signing_middleware(secret)
 
-    def setup_web3_middleware(self, secret: str) -> Web3:
-        if not all([secret]):
-            raise Warning(
-                "Missing required environment variables. Please set PRIVATE_KEY."
-            )
+    def _add_signing_middleware(self, secret: str) -> None:
+        """
+        Add signing middleware to the existing Web3 instance.
+        
+        Args:
+            secret: Private key for signing transactions
+        """
+        if not secret:
+            raise ValueError("Private key is required for signing transactions")
 
         account: LocalAccount = Account.from_key(secret)
-        provider = Web3.HTTPProvider(self.network)
-        w3 = Web3(provider)
-        w3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(account))
-        w3 = sapphire.wrap(w3, account)
-        w3.eth.default_account = account.address
-        return w3
+        self.w3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(account))
+        # self.w3 = sapphire.wrap(self.w3, account)
+        self.w3.eth.default_account = account.address
 
-    def get_contract(self, contract_name: str) -> tuple[str, str]:
+    def get_contract_abi(self, contract_name: str) -> list:
         """Fetches ABI of the given contract from the contracts folder"""
-        output_path = (
-            Path(__file__).parent.parent.parent
+        contract_path = (
+            Path(__file__).parent.parent.parent.parent
             / "contracts"
-            / "out"
-            / f"{contract_name}.sol"
             / f"{contract_name}.json"
         ).resolve()
-        contract_data = ""
-        with output_path.open() as file:
+        
+        with contract_path.open() as file:
             contract_data = json.load(file)
 
-        abi, bytecode = contract_data["abi"], contract_data["bytecode"]["object"]
-        return abi, bytecode
+        return contract_data["abi"]
