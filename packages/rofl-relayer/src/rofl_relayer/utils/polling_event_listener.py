@@ -1,7 +1,6 @@
 """
 Polling-based event listener utility for blockchain event monitoring.
 
-A simple, reliable alternative to WebSocket connections that works with any RPC endpoint.
 """
 
 import asyncio
@@ -16,8 +15,6 @@ class PollingEventListener:
     """
     Utility for polling blockchain events via HTTP RPC.
     
-    This is a simpler, more reliable alternative to WebSocket connections
-    that works with any Ethereum RPC endpoint.
     """
     
     def __init__(

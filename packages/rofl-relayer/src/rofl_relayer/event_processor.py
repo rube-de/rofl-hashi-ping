@@ -26,7 +26,8 @@ class EventProcessor:
     """Processes blockchain events for the ROFL relayer."""
     
     MAX_PROCESSED_HASHES: int = 10_000
-    MAX_PENDING_PINGS: int = 1_000
+    MAX_PENDING_PINGS: int = 10_000
+    MAX_STORED_HASHES: int = 10_000  # Prevent memory leak
     
     def __init__(self, proof_manager: ProofManager | None = None, config: Optional["RelayerConfig"] = None) -> None:
         """Initialize the event processor.
@@ -38,8 +39,14 @@ class EventProcessor:
         # State tracking with bounded collections
         # OrderedDict provides O(1) lookups and maintains insertion order for LRU
         self.processed_tx_hashes: OrderedDict[str, None] = OrderedDict()
-        self.pending_pings: deque[PingEvent] = deque(maxlen=self.MAX_PENDING_PINGS)
-        self.stored_hashes: dict[int, str] = {}  # block_number -> block_hash
+        
+        # Primary structure: dict for O(1) lookup by block_number
+        self.pending_pings: dict[int, list[PingEvent]] = {}
+        # Secondary structure: deque for O(1) FIFO removal of oldest pings
+        self.pending_pings_order: deque[PingEvent] = deque()
+        
+        # Use OrderedDict with size limit to prevent memory leak
+        self.stored_hashes: OrderedDict[int, str] = OrderedDict()
         
         # Proof generation
         self.proof_manager = proof_manager
@@ -56,7 +63,6 @@ class EventProcessor:
             PingEvent if successfully processed, None if skipped or error
         """
         try:
-            # Extract and validate transaction hash using match/case (Python 3.10+)
             match event.get('transactionHash'):
                 case None:
                     logger.warning("Event missing transaction hash")
@@ -69,11 +75,11 @@ class EventProcessor:
                     logger.warning(f"Unexpected transaction hash type: {type(event.get('transactionHash'))}")
                     return None
             
-            # Skip if already processed (O(1) OrderedDict lookup)
+            # Skip if already processed
             if tx_hash in self.processed_tx_hashes:
                 return None
             
-            # Track processed transaction (with size limit)
+            # Track processed transaction
             self._track_processed_hash(tx_hash)
             
             # Extract event data with type safety
@@ -99,8 +105,30 @@ class EventProcessor:
                 f"{sender=} ID: {ping_id[:10]}..."
             )
             
-            # Queue for processing
-            self.pending_pings.append(ping_event)
+            # Check capacity and remove oldest if needed - now O(1)!
+            if len(self.pending_pings_order) >= self.MAX_PENDING_PINGS:
+                # Remove oldest ping from both structures
+                oldest_ping = self.pending_pings_order.popleft()
+                
+                # Remove from block lookup dict
+                if oldest_ping.block_number in self.pending_pings:
+                    block_pings = self.pending_pings[oldest_ping.block_number]
+                    if oldest_ping in block_pings:
+                        block_pings.remove(oldest_ping)
+                        if not block_pings:
+                            del self.pending_pings[oldest_ping.block_number]
+                
+                logger.debug(f"Removed oldest ping {oldest_ping.ping_id[:10]}... due to capacity")
+            
+            # Add to both structures
+            # 1. Add to dict for block-based lookup
+            if block_number not in self.pending_pings:
+                self.pending_pings[block_number] = []
+            self.pending_pings[block_number].append(ping_event)
+            
+            # 2. Add to deque for FIFO ordering
+            self.pending_pings_order.append(ping_event)
+            
             return ping_event
             
         except Exception as e:
@@ -131,13 +159,15 @@ class EventProcessor:
                 case _:
                     block_hash = '0x0'
             
-            # Store the hash
+            # Store the hash with automatic eviction to prevent memory leak
+            if len(self.stored_hashes) >= self.MAX_STORED_HASHES:
+                self.stored_hashes.popitem(last=False)
+            
             self.stored_hashes[block_id] = block_hash
             
             logger.info(f"Hash stored - Block {block_id}: {block_hash[:10]}...")
             
-            # Check if any pending pings can now be processed
-            matching_pings: list[PingEvent] = [ping for ping in self.pending_pings if ping.block_number == block_id]
+            matching_pings: list[PingEvent] = self.pending_pings.get(block_id, [])
             if matching_pings:
                 logger.info(f"Found {len(matching_pings)} pings ready for block {block_id}")
                 # Process matched events with proof generation
@@ -161,16 +191,12 @@ class EventProcessor:
         Args:
             tx_hash: Transaction hash to track
         """
-        # Check if already exists - if so, move to end (most recent)
         if tx_hash in self.processed_tx_hashes:
             self.processed_tx_hashes.move_to_end(tx_hash)
         else:
-            # Check if at capacity and evict oldest if needed
             if len(self.processed_tx_hashes) >= self.MAX_PROCESSED_HASHES:
-                # Remove oldest (first) item - popitem(last=False) for FIFO
                 self.processed_tx_hashes.popitem(last=False)
             
-            # Add new hash (becomes most recent)
             self.processed_tx_hashes[tx_hash] = None
     
     async def process_matched_events(self, ping_event: PingEvent) -> None:
@@ -196,9 +222,16 @@ class EventProcessor:
             
             logger.info(f"Proof submitted successfully: {tx_hash}")
             
-            # Remove from pending queue after successful processing
-            if ping_event in self.pending_pings:
-                self.pending_pings.remove(ping_event)
+            block_pings = self.pending_pings.get(ping_event.block_number, [])
+            if ping_event in block_pings:
+                block_pings.remove(ping_event)
+                if not block_pings:
+                    del self.pending_pings[ping_event.block_number]
+            
+            try:
+                self.pending_pings_order.remove(ping_event)
+            except ValueError:
+                pass
                 
         except Exception as e:
             logger.error(f"Failed to process proof for Ping {ping_event.ping_id[:10]}...: {e}", exc_info=True)
@@ -212,6 +245,6 @@ class EventProcessor:
         """
         return {
             'processed_hashes': len(self.processed_tx_hashes),
-            'pending_pings': len(self.pending_pings),
+            'pending_pings': len(self.pending_pings_order),
             'stored_hashes': len(self.stored_hashes)
         }
