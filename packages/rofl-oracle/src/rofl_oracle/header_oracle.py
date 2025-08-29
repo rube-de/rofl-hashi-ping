@@ -8,7 +8,7 @@ from .block_submitter import BlockSubmitter
 from .config import OracleConfig
 from .event_processor import EventProcessor
 from .utils.contract_utility import ContractUtility
-from .utils.event_listener_utility import EventListenerUtility
+from .utils.polling_event_listener import PollingEventListener
 from .utils.rofl_utility import RoflUtility
 
 # Get logger for this module
@@ -66,23 +66,11 @@ class HeaderOracle:
             # Fetch chain ID from the connected RPC endpoint and update config
             logger.info("Fetching chain ID...")
             chain_id = self.source_w3.eth.chain_id
-            logger.info(f"Chain ID is {chain_id}")
+            logger.info(f"Source Chain ID is {chain_id}")
             
             # Update config with chain ID
             self.config = self.config.with_chain_id(chain_id)
             self.source_chain_id = chain_id
-
-            # Load BlockHeaderRequester ABI for event listening
-            logger.info("Loading BlockHeaderRequester ABI...")
-            self.block_requester_abi = self.contract_utility.get_contract_abi("BlockHeaderRequester")
-            logger.info("ABI loaded")
-            
-            # Create source chain contract instance (for event listening)
-            logger.info("Creating source chain contract instance...")
-            self.source_contract = self.source_w3.eth.contract(
-                address=config.source_chain.contract_address, abi=self.block_requester_abi
-            )
-            logger.info("Source chain contract instance created")
 
             # Initialize block submitter
             logger.info("Initializing block submitter...")
@@ -101,25 +89,24 @@ class HeaderOracle:
                 dedupe_window=1000  # Track last 1000 events
             )
             logger.info("Event processor initialized")
+                        
+            # Load BlockHeaderRequester ABI for event listening
+            logger.info("Loading BlockHeaderRequester ABI...")
+            self.block_requester_abi = self.contract_utility.get_contract_abi("BlockHeaderRequester")
+            logger.info("ABI loaded")
             
-            # Initialize event listener utility
-            logger.info("Initializing event listener...")
-            self.event_listener = EventListenerUtility(
-                rpc_url=config.source_chain.rpc_url
+            # Initialize polling event listener
+            logger.info("Initializing polling event listener...")
+            self.event_listener = PollingEventListener(
+                rpc_url=config.source_chain.rpc_url,
+                contract_address=config.source_chain.contract_address,
+                event_name="BlockHeaderRequested",
+                abi=self.block_requester_abi,
+                lookback_blocks=100  # Look back 100 blocks on startup
             )
-            logger.info("Event listener initialized")
+            logger.info("Polling event listener initialized")
 
-            # Log summary of configuration
-            logger.info("=" * 50)
             logger.info("HeaderOracle initialized successfully!")
-            logger.info("=" * 50)
-            logger.info(f"  Source RPC: {config.source_chain.rpc_url}")
-            logger.info(f"  Source Chain ID: {self.source_chain_id}")
-            logger.info(f"  Source Contract: {config.source_chain.contract_address}")
-            logger.info(f"  Target Network: {config.target_chain.network}")
-            logger.info(f"  ROFLAdapter Address: {config.target_chain.contract_address}")
-            logger.info("  Event Listener: WebSocket + Polling fallback")
-            logger.info("=" * 50)
             
         except Exception as e:
             logger.error(f"HeaderOracle initialization failed: {e}")
@@ -203,22 +190,18 @@ class HeaderOracle:
     async def run(self) -> None:
         """
         Main entry point for the HeaderOracle.
-        Starts event listening using the EventListenerUtility.
+        Starts event polling using the PollingEventListener.
         """
         logger.info("Starting HeaderOracle...")
-        logger.info(f"Listening for BlockHeaderRequested events from {self.config.source_chain.contract_address}")
+        logger.info(f"Polling for BlockHeaderRequested events from {self.config.source_chain.contract_address}")
         
         try:
-            # Use the contract event object directly for cleaner topic generation
-            event_obj = self.source_contract.events.BlockHeaderRequested()
+            logger.info("Starting polling event listener with 30 second interval...")
             
-            logger.info("Event configuration created, starting event listener...")
-            
-            # Start event listening (this will run indefinitely)
-            await self.event_listener.listen_for_contract_events(
-                contract_address=self.config.source_chain.contract_address,
-                event_obj=event_obj,
-                callback=self.process_block_header_event
+            # Start event polling (this will run indefinitely)
+            await self.event_listener.start_polling(
+                callback=self.process_block_header_event,
+                interval=30  # Poll every 30 seconds
             )
             
         except Exception as e:
