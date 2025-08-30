@@ -65,6 +65,8 @@ class ROFLRelayer:
         """
         # Initialize Web3 for source chain
         self.w3_source = Web3(Web3.HTTPProvider(self.config.source_chain.rpc_url))
+        if not self.w3_source.is_connected():
+            raise Exception(f"Failed to connect to source chain at {self.config.source_chain.rpc_url}")
         
         # Initialize contract utility for target chain
         self.contract_util = ContractUtility(
@@ -80,7 +82,8 @@ class ROFLRelayer:
             rofl_util=self.rofl_util
         )
         
-        logger.info(f"Initialized ProofManager in {'local' if self.config.local_mode else 'ROFL'} mode")
+        source_chain_id = self.w3_source.eth.chain_id
+        logger.info(f"ROFL Relayer initialized ({'LOCAL' if self.config.local_mode else 'ROFL'} mode, source chain: {source_chain_id})")
     
     @classmethod
     def from_env(cls, local_mode: bool = False) -> "ROFLRelayer":

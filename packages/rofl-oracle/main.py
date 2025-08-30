@@ -72,23 +72,12 @@ async def main() -> None:
     # Set up logging with specified level
     setup_logging(args.log_level)
     
-    # Use walrus operator for mode message
-    if mode_msg := ("(LOCAL MODE)" if args.local else ""):
-        logger.info(f"=== ROFL Header Oracle Starting {mode_msg} ===")
-        logger.info("Local mode enabled: ROFL utilities disabled")
-    else:
-        logger.info("=== ROFL Header Oracle Starting ===")
-        
-    logger.info("Loading configuration from environment...")
+    logger.info(f"=== ROFL Header Oracle Starting {'(LOCAL MODE)' if args.local else ''} ===")
     
     try:
         # Load configuration from environment
         config: OracleConfig = OracleConfig.from_env(local_mode=args.local)
-        logger.info("Configuration loaded successfully")
-        
-        logger.info("Creating HeaderOracle instance...")
         header_oracle: HeaderOracle = HeaderOracle(config)
-        logger.info("HeaderOracle instance created, starting main loop...")
         await header_oracle.run()
         
     except ValueError as e:

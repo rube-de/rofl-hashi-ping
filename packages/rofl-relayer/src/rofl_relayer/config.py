@@ -10,14 +10,14 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class SourceChainConfig:
     """Configuration for the source chain (Ethereum Sepolia)."""
     rpc_url: str
     ping_sender_address: str
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class TargetChainConfig:
     """Configuration for the target chain (Oasis Sapphire)."""
     rpc_url: str
@@ -26,7 +26,7 @@ class TargetChainConfig:
     private_key: Optional[str]
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class MonitoringConfig:
     """Configuration for event monitoring and processing."""
     # Hard-coded sensible defaults for MVP
@@ -35,9 +35,41 @@ class MonitoringConfig:
     lookback_blocks: int = 100
     websocket_timeout: int = 60  # seconds
     process_batch_size: int = 10  # max events to process in one batch
+    
+    def __post_init__(self) -> None:
+        """Validate monitoring configuration."""
+        # Validate polling interval
+        if self.polling_interval <= 0:
+            raise ValueError(f"Polling interval must be positive, got {self.polling_interval}")
+        if self.polling_interval > 300:
+            raise ValueError(f"Polling interval too long (max 300s), got {self.polling_interval}")
+        
+        # Validate retry count
+        if self.retry_count < 0:
+            raise ValueError(f"Retry count must be non-negative, got {self.retry_count}")
+        if self.retry_count > 10:
+            raise ValueError(f"Retry count too high (max 10), got {self.retry_count}")
+        
+        # Validate lookback blocks
+        if self.lookback_blocks <= 0:
+            raise ValueError(f"Lookback blocks must be positive, got {self.lookback_blocks}")
+        if self.lookback_blocks > 1000:
+            raise ValueError(f"Lookback blocks too high (max 1000), got {self.lookback_blocks}")
+        
+        # Validate websocket timeout
+        if self.websocket_timeout <= 0:
+            raise ValueError(f"WebSocket timeout must be positive, got {self.websocket_timeout}")
+        if self.websocket_timeout > 300:
+            raise ValueError(f"WebSocket timeout too long (max 300s), got {self.websocket_timeout}")
+        
+        # Validate batch size
+        if self.process_batch_size <= 0:
+            raise ValueError(f"Batch size must be positive, got {self.process_batch_size}")
+        if self.process_batch_size > 100:
+            raise ValueError(f"Batch size too large (max 100), got {self.process_batch_size}")
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class RelayerConfig:
     """Main configuration class for the ROFL Relayer."""
 

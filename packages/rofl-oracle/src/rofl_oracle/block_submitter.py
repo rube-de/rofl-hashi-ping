@@ -27,7 +27,8 @@ class BlockSubmitter:
         contract_util: "ContractUtility",
         rofl_util: "RoflUtility | None",
         source_chain_id: int,
-        contract_address: str
+        contract_address: str,
+        request_timeout: int = 30
     ) -> None:
         """
         Initialize the BlockSubmitter.
@@ -37,11 +38,13 @@ class BlockSubmitter:
             rofl_util: ROFL utility for transaction submission (None for local mode)
             source_chain_id: Chain ID of the source chain
             contract_address: Address of the ROFLAdapter contract
+            request_timeout: Timeout for transaction receipts in seconds (default: 30)
         """
         self.contract_util: ContractUtility = contract_util
         self.rofl_util: RoflUtility | None = rofl_util
         self.source_chain_id: int = source_chain_id
         self.contract_address: str = Web3.to_checksum_address(contract_address)
+        self.request_timeout: int = request_timeout
         
         self.rofl_adapter_abi: list[dict[str, Any]] = self.contract_util.get_contract_abi("ROFLAdapter")
         self.contract: Contract = self.contract_util.w3.eth.contract(
@@ -91,7 +94,7 @@ class BlockSubmitter:
                         logger.info(f"✓ Transaction submitted successfully: {Web3.to_hex(tx_hash)}")
                         
                         # Wait for receipt to confirm success
-                        receipt: TxReceipt = self.contract_util.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=30)
+                        receipt: TxReceipt = self.contract_util.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=self.request_timeout)
                         
                         # Use walrus operator for status check
                         if (status := receipt.get('status', 0)) == 1:

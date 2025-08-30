@@ -36,77 +36,78 @@ class HeaderOracle:
 
             if not config.local_mode:
                 # Initialize ROFL utility and fetch secret
-                logger.info("Initializing ROFL utility...")
+                logger.debug("Initializing ROFL utility...")
                 self.rofl_utility = RoflUtility()
                 
-                logger.info("Fetching oracle key from ROFL...")
+                logger.debug("Fetching oracle key from ROFL...")
                 self.secret = self.rofl_utility.fetch_key("header-oracle")
-                logger.info("Oracle key fetched successfully")
+                logger.debug("Oracle key fetched successfully")
             else:
                 # Use local private key for testing
-                logger.info("Using local private key (LOCAL MODE)")
+                logger.debug("Using local private key (LOCAL MODE)")
                 self.secret = config.local_private_key
                 self.rofl_utility = None
-                logger.info("Local private key loaded successfully")
+                logger.debug("Local private key loaded")
 
             # Initialize contract utility
-            logger.info("Initializing contract utility...")
+            logger.debug("Initializing contract utility...")
             self.contract_utility = ContractUtility(config.target_chain.network, self.secret)
-            logger.info("Contract utility initialized")
+            logger.debug("Contract utility initialized")
 
             # Connect to source chain for block fetching
-            logger.info(f"Connecting to source chain at {config.source_chain.rpc_url}")
-            self.source_w3 = Web3(Web3.HTTPProvider(config.source_chain.rpc_url, request_kwargs={'timeout': 10}))
+            logger.debug(f"Connecting to source chain at {config.source_chain.rpc_url}")
+            self.source_w3 = Web3(Web3.HTTPProvider(
+                config.source_chain.rpc_url, 
+                request_kwargs={'timeout': config.monitoring.request_timeout}
+            ))
             if not self.source_w3.is_connected():
                 raise Exception(
                     f"Failed to connect to source chain at {config.source_chain.rpc_url}"
                 )
-            logger.info("Connected to source chain")
             
             # Fetch chain ID from the connected RPC endpoint and update config
-            logger.info("Fetching chain ID...")
+            logger.debug("Fetching chain ID...")
             chain_id = self.source_w3.eth.chain_id
-            logger.info(f"Source Chain ID is {chain_id}")
             
             # Update config with chain ID
             self.config = self.config.with_chain_id(chain_id)
             self.source_chain_id = chain_id
 
             # Initialize block submitter
-            logger.info("Initializing block submitter...")
+            logger.debug("Initializing block submitter...")
             self.block_submitter = BlockSubmitter(
                 contract_util=self.contract_utility,
                 rofl_util=self.rofl_utility if not config.local_mode else None,
                 source_chain_id=self.source_chain_id,
-                contract_address=config.target_chain.contract_address
+                contract_address=config.target_chain.contract_address,
+                request_timeout=config.monitoring.request_timeout
             )
-            logger.info("Block submitter initialized")
+            logger.debug("Block submitter initialized")
             
             # Initialize event processor
-            logger.info("Initializing event processor...")
+            logger.debug("Initializing event processor...")
             self.event_processor = EventProcessor(
                 source_chain_id=self.source_chain_id,
                 dedupe_window=1000  # Track last 1000 events
             )
-            logger.info("Event processor initialized")
+            logger.debug("Event processor initialized")
                         
             # Load BlockHeaderRequester ABI for event listening
-            logger.info("Loading BlockHeaderRequester ABI...")
+            logger.debug("Loading BlockHeaderRequester ABI...")
             self.block_requester_abi = self.contract_utility.get_contract_abi("BlockHeaderRequester")
-            logger.info("ABI loaded")
+            logger.debug("ABI loaded")
             
             # Initialize polling event listener
-            logger.info("Initializing polling event listener...")
+            logger.debug("Initializing polling event listener...")
             self.event_listener = PollingEventListener(
                 rpc_url=config.source_chain.rpc_url,
                 contract_address=config.source_chain.contract_address,
                 event_name="BlockHeaderRequested",
                 abi=self.block_requester_abi,
-                lookback_blocks=100  # Look back 100 blocks on startup
+                lookback_blocks=config.monitoring.lookback_blocks
             )
-            logger.info("Polling event listener initialized")
-
-            logger.info("HeaderOracle initialized successfully!")
+            
+            logger.info(f"HeaderOracle initialized ({'LOCAL' if config.local_mode else 'ROFL'} mode, source chain: {chain_id})")
             
         except Exception as e:
             logger.error(f"HeaderOracle initialization failed: {e}")
@@ -196,12 +197,12 @@ class HeaderOracle:
         logger.info(f"Polling for BlockHeaderRequested events from {self.config.source_chain.contract_address}")
         
         try:
-            logger.info("Starting polling event listener with 30 second interval...")
+            logger.info(f"Starting polling event listener with {self.config.monitoring.polling_interval} second interval...")
             
             # Start event polling (this will run indefinitely)
             await self.event_listener.start_polling(
                 callback=self.process_block_header_event,
-                interval=30  # Poll every 30 seconds
+                interval=self.config.monitoring.polling_interval
             )
             
         except Exception as e:

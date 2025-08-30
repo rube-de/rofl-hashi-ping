@@ -109,41 +109,61 @@ class TargetChainConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class MonitoringConfig:
+    """Configuration for event monitoring and processing."""
+    # Sensible defaults for oracle operations
+    polling_interval: int = 12  # seconds between event polls
+    lookback_blocks: int = 100  # blocks to look back on startup
+    request_timeout: int = 30  # HTTP request timeout in seconds
+    retry_count: int = 3  # retry attempts for operations
+    
+    def __post_init__(self) -> None:
+        """Validate monitoring configuration."""
+        # Validate polling interval
+        if self.polling_interval <= 0:
+            raise ValueError(f"Polling interval must be positive, got {self.polling_interval}")
+        if self.polling_interval > 300:
+            raise ValueError(f"Polling interval too long (max 300s), got {self.polling_interval}")
+        
+        # Validate lookback blocks
+        if self.lookback_blocks <= 0:
+            raise ValueError(f"Lookback blocks must be positive, got {self.lookback_blocks}")
+        if self.lookback_blocks > 1000:
+            raise ValueError(f"Lookback blocks too high (max 1000), got {self.lookback_blocks}")
+        
+        # Validate request timeout
+        if self.request_timeout <= 0:
+            raise ValueError(f"Request timeout must be positive, got {self.request_timeout}")
+        if self.request_timeout > 120:
+            raise ValueError(f"Request timeout too long (max 120s), got {self.request_timeout}")
+        
+        # Validate retry count
+        if self.retry_count < 0:
+            raise ValueError(f"Retry count must be non-negative, got {self.retry_count}")
+        if self.retry_count > 10:
+            raise ValueError(f"Retry count too high (max 10), got {self.retry_count}")
+
+
+@dataclass(frozen=True, slots=True)
 class OracleConfig:
     """Main configuration for the ROFL Oracle.
     
     Attributes:
         source_chain: Configuration for the source blockchain
         target_chain: Configuration for the target Sapphire chain
-        polling_interval: Seconds between event polling checks
+        monitoring: Configuration for monitoring and event processing
         local_mode: Whether running in local mode (for testing)
         local_private_key: Private key for local mode (optional)
     """
     
     source_chain: SourceChainConfig
     target_chain: TargetChainConfig
-    polling_interval: int = 12
+    monitoring: MonitoringConfig
     local_mode: bool = False
     local_private_key: str | None = None
     
     def __post_init__(self) -> None:
         """Validate oracle configuration."""
-        # Validate polling interval
-        if self.polling_interval <= 0:
-            raise ValueError(
-                f"Polling interval must be positive, got {self.polling_interval}"
-            )
-        
-        if self.polling_interval < 1:
-            raise ValueError(
-                "Polling interval too short. Minimum is 1 second"
-            )
-        
-        if self.polling_interval > 300:
-            raise ValueError(
-                "Polling interval too long. Maximum is 300 seconds (5 minutes)"
-            )
-        
         # Validate local mode configuration
         if self.local_mode and not self.local_private_key:
             raise ValueError(
@@ -214,14 +234,26 @@ class OracleConfig:
             contract_address=target_contract
         )
         
-        # Load oracle config
+        # Load monitoring config
         polling_interval = int(os.environ.get("POLLING_INTERVAL", "12"))
+        lookback_blocks = int(os.environ.get("LOOKBACK_BLOCKS", "100"))
+        request_timeout = int(os.environ.get("REQUEST_TIMEOUT", "30"))
+        retry_count = int(os.environ.get("RETRY_COUNT", "3"))
+        
+        monitoring_config = MonitoringConfig(
+            polling_interval=polling_interval,
+            lookback_blocks=lookback_blocks,
+            request_timeout=request_timeout,
+            retry_count=retry_count
+        )
+        
+        # Load oracle config
         local_private_key = os.environ.get("LOCAL_PRIVATE_KEY") if local_mode else None
         
         return cls(
             source_chain=source_config,
             target_chain=target_config,
-            polling_interval=polling_interval,
+            monitoring=monitoring_config,
             local_mode=local_mode,
             local_private_key=local_private_key
         )
@@ -242,8 +274,13 @@ class OracleConfig:
         logger.info(f"  Network: {self.target_chain.network}")
         logger.info(f"  Contract: {self.target_chain.contract_address}")
         
+        logger.info("Monitoring Settings:")
+        logger.info(f"  Polling Interval: {self.monitoring.polling_interval} seconds")
+        logger.info(f"  Lookback Blocks: {self.monitoring.lookback_blocks}")
+        logger.info(f"  Request Timeout: {self.monitoring.request_timeout} seconds")
+        logger.info(f"  Retry Count: {self.monitoring.retry_count}")
+        
         logger.info("Oracle Settings:")
-        logger.info(f"  Polling Interval: {self.polling_interval} seconds")
         logger.info(f"  Mode: {'LOCAL' if self.local_mode else 'PRODUCTION'}")
         
         if self.local_mode:
@@ -272,7 +309,7 @@ class OracleConfig:
         return OracleConfig(
             source_chain=source_config,
             target_chain=self.target_chain,
-            polling_interval=self.polling_interval,
+            monitoring=self.monitoring,
             local_mode=self.local_mode,
             local_private_key=self.local_private_key
         )
