@@ -176,7 +176,7 @@ class EventListenerUtility:
             log_receipt = handler_context.result
             
             # Handle both dict and object formats for log_receipt
-            if hasattr(log_receipt, 'get') and callable(getattr(log_receipt, 'get')):
+            if hasattr(log_receipt, 'get') and callable(log_receipt.get):
                 # Dict-like object
                 event_data = {
                     'address': log_receipt.get('address'),

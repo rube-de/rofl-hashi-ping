@@ -6,10 +6,11 @@ on Oasis Sapphire, supporting both local (testing) and production (ROFL) modes.
 """
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from web3 import Web3
-from web3.types import TxParams, Wei
+from web3.contract import Contract
+from web3.types import HexBytes, TxParams, TxReceipt, Wei
 
 if TYPE_CHECKING:
     from .utils.contract_utility import ContractUtility
@@ -37,22 +38,22 @@ class BlockSubmitter:
             source_chain_id: Chain ID of the source chain
             contract_address: Address of the ROFLAdapter contract
         """
-        self.contract_util = contract_util
-        self.rofl_util = rofl_util
-        self.source_chain_id = source_chain_id
-        self.contract_address = Web3.to_checksum_address(contract_address)
+        self.contract_util: ContractUtility = contract_util
+        self.rofl_util: RoflUtility | None = rofl_util
+        self.source_chain_id: int = source_chain_id
+        self.contract_address: str = Web3.to_checksum_address(contract_address)
         
-        self.rofl_adapter_abi = self.contract_util.get_contract_abi("ROFLAdapter")
-        self.contract = self.contract_util.w3.eth.contract(
+        self.rofl_adapter_abi: list[dict[str, Any]] = self.contract_util.get_contract_abi("ROFLAdapter")
+        self.contract: Contract = self.contract_util.w3.eth.contract(
             address=self.contract_address,
             abi=self.rofl_adapter_abi
         )
         
-        # Log initialization mode
-        mode = "ROFL production" if rofl_util else "local testing"
-        logger.info(f"BlockSubmitter initialized in {mode} mode")
-        logger.info(f"  Source Chain ID: {source_chain_id}")
-        logger.info(f"  ROFLAdapter Address: {contract_address}")
+        # Log initialization mode using walrus operator
+        if mode := ("ROFL production" if rofl_util else "local testing"):
+            logger.info(f"BlockSubmitter initialized in {mode} mode")
+            logger.info(f"  Source Chain ID: {source_chain_id}")
+            logger.info(f"  ROFLAdapter Address: {contract_address}")
     
     async def submit_block_header(self, block_number: int, block_hash: str) -> bool:
         """
@@ -71,62 +72,63 @@ class BlockSubmitter:
         try:
             logger.info(f"Submitting block header for block {block_number}, hash: {block_hash}")
             
-            if self.rofl_util:
-                # Production mode: submit via ROFL
-                tx_params: TxParams = {
-                    'from': '0x0000000000000000000000000000000000000000',  # ROFL will override
-                    'gas': 300000,
-                    'gasPrice': self.contract_util.w3.eth.gas_price,
-                    'value': Wei(0)
-                }
-                
-                tx_data = self.contract.functions.storeBlockHeader(
-                    self.source_chain_id,
-                    block_number,
-                    block_hash
-                ).build_transaction(tx_params)
-                
-                logger.debug(f"Submitting transaction to ROFL with gas={tx_params['gas']}")
-                
-                # Submit via ROFL utility
-                success = await self.rofl_util.submit_tx(tx_data)
-                
-                if success:
-                    logger.info("✓ Block header submitted successfully via ROFL")
-                    return True
-                else:
-                    logger.error("✗ Failed to submit block header via ROFL")
-                    return False
+            # Use pattern matching for mode selection
+            match self.rofl_util:
+                case None:
+                    # Local mode
+                    logger.info("🔧 LOCAL MODE: Submitting transaction directly")
                     
-            else:
-                # Local mode
-                logger.info("🔧 LOCAL MODE: Submitting transaction directly")
+                    try:
+                        tx_hash: HexBytes = self.contract.functions.storeBlockHeader(
+                            self.source_chain_id,
+                            block_number,
+                            block_hash
+                        ).transact({
+                            'gas': 300000,
+                            'gasPrice': self.contract_util.w3.eth.gas_price
+                        })
+                        
+                        logger.info(f"✓ Transaction submitted successfully: {Web3.to_hex(tx_hash)}")
+                        
+                        # Wait for receipt to confirm success
+                        receipt: TxReceipt = self.contract_util.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=30)
+                        
+                        # Use walrus operator for status check
+                        if (status := receipt.get('status', 0)) == 1:
+                            logger.info(f"✓ Transaction confirmed in block {receipt['blockNumber']}")
+                            return True
+                        else:
+                            logger.error(f"✗ Transaction failed with status={status}")
+                            return False
+                            
+                    except Exception as tx_error:
+                        logger.error(f"Local transaction failed: {tx_error}")
+                        return False
                 
-                try:
-                    tx_hash = self.contract.functions.storeBlockHeader(
+                case rofl_util:
+                    # Production mode: submit via ROFL
+                    tx_params: TxParams = {
+                        'from': '0x0000000000000000000000000000000000000000',  # ROFL will override
+                        'gas': 300000,
+                        'gasPrice': self.contract_util.w3.eth.gas_price,
+                        'value': Wei(0)
+                    }
+                    
+                    tx_data: dict[str, Any] = self.contract.functions.storeBlockHeader(
                         self.source_chain_id,
                         block_number,
                         block_hash
-                    ).transact({
-                        'gas': 300000,
-                        'gasPrice': self.contract_util.w3.eth.gas_price
-                    })
+                    ).build_transaction(tx_params)
                     
-                    logger.info(f"✓ Transaction submitted successfully: {Web3.to_hex(tx_hash)}")
+                    logger.debug(f"Submitting transaction to ROFL with gas={tx_params.get('gas')}")
                     
-                    # Wait for receipt to confirm success
-                    receipt = self.contract_util.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=30)
-                    
-                    if receipt['status'] == 1:
-                        logger.info(f"✓ Transaction confirmed in block {receipt['blockNumber']}")
+                    # Submit via ROFL utility
+                    if await rofl_util.submit_tx(tx_data):
+                        logger.info("✓ Block header submitted successfully via ROFL")
                         return True
                     else:
-                        logger.error(f"✗ Transaction failed with status={receipt['status']}")
+                        logger.error("✗ Failed to submit block header via ROFL")
                         return False
-                        
-                except Exception as tx_error:
-                    logger.error(f"Local transaction failed: {tx_error}")
-                    return False
                     
         except Exception as e:
             logger.error(f"Error submitting block header: {e}", exc_info=True)

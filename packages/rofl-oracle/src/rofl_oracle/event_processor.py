@@ -108,7 +108,7 @@ class EventProcessor:
         """Parse raw event data into a BlockHeaderEvent.
         
         Handles both dict format (from WebSocket) and EventData format
-        (from polling).
+        (from polling) using pattern matching.
         
         Args:
             event_data: Raw event data
@@ -117,47 +117,63 @@ class EventProcessor:
             Parsed BlockHeaderEvent or None if parsing fails
         """
         try:
-            # Extract common fields based on data format
-            if hasattr(event_data, 'get'):
+            # Use pattern matching to handle different event data formats
+            topics: list[Any]
+            event_block: int
+            tx_hash: str
+            log_index: int
+            data: str
+            
+            match event_data:
                 # Dict format from WebSocket
-                topics = event_data.get('topics', [])
-                event_block = event_data.get('blockNumber', 0)
-                tx_hash = event_data.get('transactionHash', '')
-                log_index = event_data.get('logIndex', 0)
-                data = event_data.get('data', '')
-            else:
-                # EventData format from polling
-                topics = getattr(event_data, 'topics', [])
-                # Handle case where topics is not a list
-                if not isinstance(topics, list):
-                    topics = list(topics) if topics else []
-                event_block = getattr(event_data, 'blockNumber', 0)
-                tx_hash = getattr(event_data, 'transactionHash', b'')
-                if isinstance(tx_hash, bytes):
-                    tx_hash = tx_hash.hex()
-                else:
-                    tx_hash = str(tx_hash)
-                log_index = getattr(event_data, 'logIndex', 0)
-                data = getattr(event_data, 'data', '')
+                case {'topics': t, 'blockNumber': b, 'transactionHash': h, 'logIndex': i, 'data': d}:
+                    topics = t if isinstance(t, list) else []
+                    event_block = b
+                    tx_hash = h
+                    log_index = i
+                    data = d
+                # Dict with partial fields
+                case dict():
+                    topics = event_data.get('topics', [])
+                    event_block = event_data.get('blockNumber', 0)
+                    tx_hash = event_data.get('transactionHash', '')
+                    log_index = event_data.get('logIndex', 0)
+                    data = event_data.get('data', '')
+                # EventData format from polling (object with attributes)
+                case _:
+                    topics = getattr(event_data, 'topics', [])
+                    # Handle case where topics is not a list
+                    if not isinstance(topics, list):
+                        topics = list(topics) if topics else []
+                    event_block = getattr(event_data, 'blockNumber', 0)
+                    tx_hash_raw = getattr(event_data, 'transactionHash', b'')
+                    if isinstance(tx_hash_raw, bytes):
+                        tx_hash = tx_hash_raw.hex()
+                    else:
+                        tx_hash = str(tx_hash_raw)
+                    log_index = getattr(event_data, 'logIndex', 0)
+                    data = getattr(event_data, 'data', '')
             
             # Validate we have enough topics (signature + 2 indexed params)
-            if not topics or len(topics) < 3:
+            if len(topics) < 3:
                 logger.warning(f"Insufficient topics in event: {len(topics) if topics else 0}")
                 self.events_invalid += 1
                 return None
             
             # Parse indexed parameters from topics
-            chain_id = parse_event_topic_as_int(topics[1])
-            requested_block = parse_event_topic_as_int(topics[2])
+            chain_id: int = parse_event_topic_as_int(topics[1])
+            requested_block: int = parse_event_topic_as_int(topics[2])
             
             # Parse non-indexed parameters from data
+            requester: str
+            context: str
             requester, context = self._decode_event_data(data)
             
-            # Normalize tx_hash format
+            # Normalize tx_hash format using walrus operator
             if isinstance(tx_hash, bytes):
-                tx_hash = '0x' + tx_hash.hex()
+                tx_hash = f'0x{tx_hash.hex()}'
             elif not tx_hash.startswith('0x'):
-                tx_hash = '0x' + tx_hash
+                tx_hash = f'0x{tx_hash}'
             
             return BlockHeaderEvent(
                 chain_id=chain_id,
@@ -188,7 +204,7 @@ class EventProcessor:
             Tuple of (requester_address, context_hash)
         """
         try:
-            # Remove 0x prefix if present
+            # Remove 0x prefix if present using walrus operator
             if data.startswith('0x'):
                 data = data[2:]
             
@@ -197,12 +213,12 @@ class EventProcessor:
                 return '', ''
             
             # Extract requester address (first 32 bytes, last 20 bytes are the address)
-            requester_hex = data[24:64]  # Skip 12 bytes of padding
-            requester = '0x' + requester_hex
+            requester_hex: str = data[24:64]  # Skip 12 bytes of padding
+            requester = f'0x{requester_hex}'
             
             # Extract context (second 32 bytes)
-            context_hex = data[64:128]
-            context = '0x' + context_hex
+            context_hex: str = data[64:128]
+            context = f'0x{context_hex}'
             
             # Validate and checksum the requester address
             if Web3.is_address(requester):
@@ -223,13 +239,14 @@ class EventProcessor:
         Returns:
             True if the event should be processed, False otherwise
         """
-        if chain_id != self.source_chain_id:
-            logger.warning(
-                f"Skipping event for chain {chain_id} "
-                f"(configured for chain {self.source_chain_id})"
-            )
-            return False
-        return True
+        if chain_id == self.source_chain_id:
+            return True
+        
+        logger.warning(
+            f"Skipping event for chain {chain_id} "
+            f"(configured for chain {self.source_chain_id})"
+        )
+        return False
     
     def _is_duplicate(self, event: BlockHeaderEvent) -> bool:
         """Check if an event has already been processed.
@@ -254,13 +271,13 @@ class EventProcessor:
         Args:
             event: The event to mark as processed
         """
-        event_key = event.unique_key
+        event_key: tuple[int, int, str, int] = event.unique_key
         
         # Check if already exists - if so, move to end (most recent)
         if event_key in self.processed_events:
             self.processed_events.move_to_end(event_key)
         else:
-            # Check if at capacity and evict oldest if needed
+            # Check if at capacity and evict oldest if needed using walrus
             if len(self.processed_events) >= self.dedupe_window:
                 # Remove oldest (first) item - FIFO eviction
                 self.processed_events.popitem(last=False)
