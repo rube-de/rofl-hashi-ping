@@ -105,12 +105,10 @@ class EventProcessor:
                 f"{sender=} ID: {ping_id[:10]}..."
             )
             
-            # Check capacity and remove oldest if needed - now O(1)!
+            # Check capacity and remove oldest if needed
             if len(self.pending_pings_order) >= self.MAX_PENDING_PINGS:
-                # Remove oldest ping from both structures
                 oldest_ping = self.pending_pings_order.popleft()
                 
-                # Remove from block lookup dict
                 if oldest_ping.block_number in self.pending_pings:
                     block_pings = self.pending_pings[oldest_ping.block_number]
                     if oldest_ping in block_pings:
@@ -121,12 +119,10 @@ class EventProcessor:
                 logger.debug(f"Removed oldest ping {oldest_ping.ping_id[:10]}... due to capacity")
             
             # Add to both structures
-            # 1. Add to dict for block-based lookup
             if block_number not in self.pending_pings:
                 self.pending_pings[block_number] = []
             self.pending_pings[block_number].append(ping_event)
             
-            # 2. Add to deque for FIFO ordering
             self.pending_pings_order.append(ping_event)
             
             return ping_event

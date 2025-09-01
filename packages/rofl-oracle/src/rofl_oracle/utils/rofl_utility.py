@@ -53,8 +53,8 @@ class RoflUtility:
             base_url: str = self.url if self.url and self.url.startswith('http') else "http://localhost"
             full_url: str = base_url + path
             logger.debug(f"Posting to {full_url}: {json.dumps(payload)}")
-            # Use 30-second timeout for blockchain operations
-            response: httpx.Response = await client.post(full_url, json=payload, timeout=30.0)
+            # Use 60-second timeout for blockchain operations (production can be slow)
+            response: httpx.Response = await client.post(full_url, json=payload, timeout=60.0)
             response.raise_for_status()
             return response.json()
 

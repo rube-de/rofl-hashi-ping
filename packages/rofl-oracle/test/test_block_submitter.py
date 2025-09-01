@@ -32,6 +32,7 @@ def mock_contract():
     """Create a mock contract instance."""
     mock = MagicMock()
     mock.functions.storeBlockHeader = MagicMock()
+    mock.functions.setHashes = MagicMock()
     return mock
 
 
@@ -43,53 +44,87 @@ class TestBlockSubmitter:
         source_chain_id = 1
         contract_address = "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb7"
         
-        with patch.object(BlockSubmitter, '_load_rofl_adapter_abi', return_value=[]):
-            submitter = BlockSubmitter(
-                contract_util=mock_contract_util,
-                rofl_util=mock_rofl_util,
-                source_chain_id=source_chain_id,
-                contract_address=contract_address
-            )
-            
-            assert submitter.contract_util == mock_contract_util
-            assert submitter.rofl_util == mock_rofl_util
-            assert submitter.source_chain_id == source_chain_id
-            assert submitter.contract_address == Web3.to_checksum_address(contract_address)
+        # Mock the get_contract_abi method to return ROFLAdapter ABI
+        mock_contract_util.get_contract_abi = MagicMock(return_value=[
+            {"name": "storeBlockHeader", "type": "function", "inputs": [
+                {"name": "chainId", "type": "uint256"},
+                {"name": "blockNumber", "type": "uint256"},
+                {"name": "blockHash", "type": "bytes32"}
+            ]}
+        ])
+        mock_contract_util.w3.eth.contract = MagicMock()
+        
+        submitter = BlockSubmitter(
+            contract_util=mock_contract_util,
+            rofl_util=mock_rofl_util,
+            source_chain_id=source_chain_id,
+            contract_address=contract_address
+        )
+        
+        assert submitter.contract_util == mock_contract_util
+        assert submitter.rofl_util == mock_rofl_util
+        assert submitter.source_chain_id == source_chain_id
+        assert submitter.contract_address == Web3.to_checksum_address(contract_address)
+        # Verify ROFLAdapter ABI was loaded
+        mock_contract_util.get_contract_abi.assert_called_once_with("ROFLAdapter")
     
     def test_init_without_rofl_util(self, mock_contract_util):
         """Test initialization without ROFL utility (local mode)."""
         source_chain_id = 1
         contract_address = "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb7"
         
-        with patch.object(BlockSubmitter, '_load_rofl_adapter_abi', return_value=[]):
-            submitter = BlockSubmitter(
-                contract_util=mock_contract_util,
-                rofl_util=None,
-                source_chain_id=source_chain_id,
-                contract_address=contract_address
-            )
-            
-            assert submitter.contract_util == mock_contract_util
-            assert submitter.rofl_util is None
-            assert submitter.source_chain_id == source_chain_id
-            assert submitter.contract_address == Web3.to_checksum_address(contract_address)
-    
-    def test_load_rofl_adapter_abi(self, mock_contract_util):
-        """Test ABI loading."""
+        # Mock the get_contract_abi method to return MockAdapter ABI
+        mock_contract_util.get_contract_abi = MagicMock(return_value=[
+            {"name": "setHashes", "type": "function", "inputs": [
+                {"name": "domain", "type": "uint256"},
+                {"name": "ids", "type": "uint256[]"},
+                {"name": "hashes", "type": "bytes32[]"}
+            ]}
+        ])
+        mock_contract_util.w3.eth.contract = MagicMock()
+        
         submitter = BlockSubmitter(
             contract_util=mock_contract_util,
             rofl_util=None,
-            source_chain_id=1,
-            contract_address="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb7"
+            source_chain_id=source_chain_id,
+            contract_address=contract_address
         )
         
-        abi = submitter._load_rofl_adapter_abi()
+        assert submitter.contract_util == mock_contract_util
+        assert submitter.rofl_util is None
+        assert submitter.source_chain_id == source_chain_id
+        assert submitter.contract_address == Web3.to_checksum_address(contract_address)
+        # Verify MockAdapter ABI was loaded
+        mock_contract_util.get_contract_abi.assert_called_once_with("MockAdapter")
+    
+    def test_abi_loading_based_on_mode(self, mock_contract_util, mock_rofl_util):
+        """Test that correct ABI is loaded based on mode."""
+        source_chain_id = 1
+        contract_address = "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb7"
         
-        assert isinstance(abi, list)
-        assert len(abi) == 1
-        assert abi[0]["name"] == "storeBlockHeader"
-        assert abi[0]["type"] == "function"
-        assert len(abi[0]["inputs"]) == 3
+        # Test ROFL mode loads ROFLAdapter
+        mock_contract_util.get_contract_abi = MagicMock()
+        mock_contract_util.w3.eth.contract = MagicMock()
+        
+        submitter_rofl = BlockSubmitter(
+            contract_util=mock_contract_util,
+            rofl_util=mock_rofl_util,
+            source_chain_id=source_chain_id,
+            contract_address=contract_address
+        )
+        mock_contract_util.get_contract_abi.assert_called_with("ROFLAdapter")
+        
+        # Reset mock
+        mock_contract_util.get_contract_abi.reset_mock()
+        
+        # Test local mode loads MockAdapter
+        submitter_local = BlockSubmitter(
+            contract_util=mock_contract_util,
+            rofl_util=None,
+            source_chain_id=source_chain_id,
+            contract_address=contract_address
+        )
+        mock_contract_util.get_contract_abi.assert_called_with("MockAdapter")
     
     @pytest.mark.asyncio
     async def test_submit_block_header_rofl_success(self, mock_contract_util, mock_rofl_util, mock_contract):
@@ -109,22 +144,29 @@ class TestBlockSubmitter:
         })
         mock_contract.functions.storeBlockHeader.return_value = mock_build_tx
         
-        with patch.object(BlockSubmitter, '_load_rofl_adapter_abi', return_value=[]):
-            submitter = BlockSubmitter(
-                contract_util=mock_contract_util,
-                rofl_util=mock_rofl_util,
-                source_chain_id=source_chain_id,
-                contract_address="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb7"
-            )
-            submitter.contract = mock_contract
-            
-            result = await submitter.submit_block_header(block_number, block_hash)
-            
-            assert result is True
-            mock_contract.functions.storeBlockHeader.assert_called_once_with(
-                source_chain_id, block_number, block_hash
-            )
-            mock_rofl_util.submit_tx.assert_called_once()
+        mock_contract_util.get_contract_abi = MagicMock(return_value=[])
+        mock_contract_util.w3.eth.contract = MagicMock(return_value=mock_contract)
+        
+        submitter = BlockSubmitter(
+            contract_util=mock_contract_util,
+            rofl_util=mock_rofl_util,
+            source_chain_id=source_chain_id,
+            contract_address="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb7"
+        )
+        
+        result = await submitter.submit_block_header(block_number, block_hash)
+        
+        assert result is True
+        # We expect the block hash to be converted to bytes32
+        from web3 import Web3
+        from web3.types import HexStr
+        expected_block_hash_bytes = Web3.to_bytes(hexstr=HexStr(block_hash))
+        # The block_hash (hex string) is passed directly to the function
+        mock_contract.functions.storeBlockHeader.assert_called_once_with(
+            source_chain_id, block_number, expected_block_hash_bytes
+            source_chain_id, block_number, block_hash
+        )
+        mock_rofl_util.submit_tx.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_submit_block_header_rofl_failure(self, mock_contract_util, mock_rofl_util, mock_contract):
@@ -146,19 +188,20 @@ class TestBlockSubmitter:
         })
         mock_contract.functions.storeBlockHeader.return_value = mock_build_tx
         
-        with patch.object(BlockSubmitter, '_load_rofl_adapter_abi', return_value=[]):
-            submitter = BlockSubmitter(
-                contract_util=mock_contract_util,
-                rofl_util=mock_rofl_util,
-                source_chain_id=source_chain_id,
-                contract_address="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb7"
-            )
-            submitter.contract = mock_contract
-            
-            result = await submitter.submit_block_header(block_number, block_hash)
-            
-            assert result is False
-            mock_rofl_util.submit_tx.assert_called_once()
+        mock_contract_util.get_contract_abi = MagicMock(return_value=[])
+        mock_contract_util.w3.eth.contract = MagicMock(return_value=mock_contract)
+        
+        submitter = BlockSubmitter(
+            contract_util=mock_contract_util,
+            rofl_util=mock_rofl_util,
+            source_chain_id=source_chain_id,
+            contract_address="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb7"
+        )
+        
+        result = await submitter.submit_block_header(block_number, block_hash)
+        
+        assert result is False
+        mock_rofl_util.submit_tx.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_submit_block_header_local_success(self, mock_contract_util, mock_contract):
@@ -168,10 +211,10 @@ class TestBlockSubmitter:
         block_hash = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
         tx_hash = b'\x12\x34\x56\x78'
         
-        # Setup mocks
+        # Setup mocks for MockAdapter
         mock_transact = MagicMock()
         mock_transact.transact = MagicMock(return_value=tx_hash)
-        mock_contract.functions.storeBlockHeader.return_value = mock_transact
+        mock_contract.functions.setHashes.return_value = mock_transact
         
         # Mock successful receipt
         mock_contract_util.w3.eth.wait_for_transaction_receipt.return_value = {
@@ -179,26 +222,36 @@ class TestBlockSubmitter:
             'blockNumber': 12346
         }
         
-        with patch.object(BlockSubmitter, '_load_rofl_adapter_abi', return_value=[]):
-            submitter = BlockSubmitter(
-                contract_util=mock_contract_util,
-                rofl_util=None,  # Local mode
-                source_chain_id=source_chain_id,
-                contract_address="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb7"
-            )
-            submitter.contract = mock_contract
-            
-            result = await submitter.submit_block_header(block_number, block_hash)
-            
-            assert result is True
-            mock_contract.functions.storeBlockHeader.assert_called_once_with(
-                source_chain_id, block_number, block_hash
-            )
-            mock_transact.transact.assert_called_once_with({
-                'gas': 300000,
-                'gasPrice': Wei(1000000000)
-            })
-            mock_contract_util.w3.eth.wait_for_transaction_receipt.assert_called_once()
+        mock_contract_util.get_contract_abi = MagicMock(return_value=[])
+        mock_contract_util.w3.eth.contract = MagicMock(return_value=mock_contract)
+        
+        submitter = BlockSubmitter(
+            contract_util=mock_contract_util,
+            rofl_util=None,  # Local mode
+            source_chain_id=source_chain_id,
+            contract_address="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb7"
+        )
+        
+        result = await submitter.submit_block_header(block_number, block_hash)
+        
+        assert result is True
+        # MockAdapter uses setHashes with arrays
+        # We expect the block hash to be converted to bytes32
+        from web3 import Web3
+        from web3.types import HexStr
+        expected_block_hash_bytes = Web3.to_bytes(hexstr=HexStr(block_hash))
+        # MockAdapter uses setHashes with arrays. We pass a list of hex strings.
+        mock_contract.functions.setHashes.assert_called_once_with(
+            source_chain_id,  # domain
+            [block_number],   # ids array
+            [expected_block_hash_bytes]  # hashes array (as bytes32[])
+            [block_hash]      # hashes array (as list of hex strings)
+        )
+        mock_transact.transact.assert_called_once_with({
+            'gas': 300000,
+            'gasPrice': Wei(1000000000)
+        })
+        mock_contract_util.w3.eth.wait_for_transaction_receipt.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_submit_block_header_local_failure(self, mock_contract_util, mock_contract):
@@ -208,10 +261,10 @@ class TestBlockSubmitter:
         block_hash = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
         tx_hash = b'\x12\x34\x56\x78'
         
-        # Setup mocks
+        # Setup mocks for MockAdapter
         mock_transact = MagicMock()
         mock_transact.transact = MagicMock(return_value=tx_hash)
-        mock_contract.functions.storeBlockHeader.return_value = mock_transact
+        mock_contract.functions.setHashes.return_value = mock_transact
         
         # Mock failed receipt (status = 0)
         mock_contract_util.w3.eth.wait_for_transaction_receipt.return_value = {
@@ -219,18 +272,19 @@ class TestBlockSubmitter:
             'blockNumber': 12346
         }
         
-        with patch.object(BlockSubmitter, '_load_rofl_adapter_abi', return_value=[]):
-            submitter = BlockSubmitter(
-                contract_util=mock_contract_util,
-                rofl_util=None,  # Local mode
-                source_chain_id=source_chain_id,
-                contract_address="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb7"
-            )
-            submitter.contract = mock_contract
-            
-            result = await submitter.submit_block_header(block_number, block_hash)
-            
-            assert result is False
+        mock_contract_util.get_contract_abi = MagicMock(return_value=[])
+        mock_contract_util.w3.eth.contract = MagicMock(return_value=mock_contract)
+        
+        submitter = BlockSubmitter(
+            contract_util=mock_contract_util,
+            rofl_util=None,  # Local mode
+            source_chain_id=source_chain_id,
+            contract_address="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb7"
+        )
+        
+        result = await submitter.submit_block_header(block_number, block_hash)
+        
+        assert result is False
     
     @pytest.mark.asyncio
     async def test_submit_block_header_exception_handling(self, mock_contract_util, mock_rofl_util, mock_contract):
@@ -242,18 +296,19 @@ class TestBlockSubmitter:
         # Setup mock to raise exception
         mock_contract.functions.storeBlockHeader.side_effect = Exception("Test error")
         
-        with patch.object(BlockSubmitter, '_load_rofl_adapter_abi', return_value=[]):
-            submitter = BlockSubmitter(
-                contract_util=mock_contract_util,
-                rofl_util=mock_rofl_util,
-                source_chain_id=source_chain_id,
-                contract_address="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb7"
-            )
-            submitter.contract = mock_contract
-            
-            result = await submitter.submit_block_header(block_number, block_hash)
-            
-            assert result is False
+        mock_contract_util.get_contract_abi = MagicMock(return_value=[])
+        mock_contract_util.w3.eth.contract = MagicMock(return_value=mock_contract)
+        
+        submitter = BlockSubmitter(
+            contract_util=mock_contract_util,
+            rofl_util=mock_rofl_util,
+            source_chain_id=source_chain_id,
+            contract_address="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb7"
+        )
+        
+        result = await submitter.submit_block_header(block_number, block_hash)
+        
+        assert result is False
     
     @pytest.mark.asyncio
     async def test_submit_block_header_local_transaction_error(self, mock_contract_util, mock_contract):
@@ -262,20 +317,21 @@ class TestBlockSubmitter:
         block_number = 12345
         block_hash = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
         
-        # Setup mock to raise exception during transact
+        # Setup mock to raise exception during transact with MockAdapter's setHashes
         mock_transact = MagicMock()
         mock_transact.transact.side_effect = Exception("Transaction failed")
-        mock_contract.functions.storeBlockHeader.return_value = mock_transact
+        mock_contract.functions.setHashes.return_value = mock_transact
         
-        with patch.object(BlockSubmitter, '_load_rofl_adapter_abi', return_value=[]):
-            submitter = BlockSubmitter(
-                contract_util=mock_contract_util,
-                rofl_util=None,  # Local mode
-                source_chain_id=source_chain_id,
-                contract_address="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb7"
-            )
-            submitter.contract = mock_contract
-            
-            result = await submitter.submit_block_header(block_number, block_hash)
-            
-            assert result is False
+        mock_contract_util.get_contract_abi = MagicMock(return_value=[])
+        mock_contract_util.w3.eth.contract = MagicMock(return_value=mock_contract)
+        
+        submitter = BlockSubmitter(
+            contract_util=mock_contract_util,
+            rofl_util=None,  # Local mode
+            source_chain_id=source_chain_id,
+            contract_address="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb7"
+        )
+        
+        result = await submitter.submit_block_header(block_number, block_hash)
+        
+        assert result is False

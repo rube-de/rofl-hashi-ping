@@ -35,13 +35,10 @@ class HeaderOracle:
             self.config.log_config()
 
             if not config.local_mode:
-                # Initialize ROFL utility and fetch secret
+                # Initialize ROFL utility
                 logger.debug("Initializing ROFL utility...")
                 self.rofl_utility = RoflUtility()
-                
-                logger.debug("Fetching oracle key from ROFL...")
-                self.secret = self.rofl_utility.fetch_key("header-oracle")
-                logger.debug("Oracle key fetched successfully")
+                self.secret = None
             else:
                 # Use local private key for testing
                 logger.debug("Using local private key (LOCAL MODE)")
@@ -49,9 +46,9 @@ class HeaderOracle:
                 self.rofl_utility = None
                 logger.debug("Local private key loaded")
 
-            # Initialize contract utility
+            # Initialize contract utility (secret only needed for local mode)
             logger.debug("Initializing contract utility...")
-            self.contract_utility = ContractUtility(config.target_chain.network, self.secret)
+            self.contract_utility = ContractUtility(config.target_chain.rpc_url, self.secret)
             logger.debug("Contract utility initialized")
 
             # Connect to source chain for block fetching
@@ -169,9 +166,9 @@ class HeaderOracle:
                     success = await self.block_submitter.submit_block_header(event.block_number, block_hash_hex)
                     
                     if success:
-                        logger.info(f"✓ Successfully submitted block {event.block_number} header to Sapphire")
+                        logger.info(f"Successfully submitted block {event.block_number} header to Sapphire")
                     else:
-                        logger.error(f"✗ Failed to submit block {event.block_number} header")
+                        logger.error(f"Failed to submit block {event.block_number} header")
             else:
                 logger.error(f"Could not fetch block {event.block_number}")
             

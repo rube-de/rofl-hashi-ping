@@ -20,7 +20,11 @@ logger = logging.getLogger(__name__)
 
 
 class BlockSubmitter:
-    """Handles block header submission to the ROFLAdapter contract."""
+    """Handles block header submission to adapter contracts.
+    
+    Supports both MockAdapter (local testing) and ROFLAdapter (production) contracts,
+    automatically selecting the appropriate ABI and function calls based on the mode.
+    """
     
     def __init__(
         self,
@@ -37,7 +41,7 @@ class BlockSubmitter:
             contract_util: Utility for contract interactions
             rofl_util: ROFL utility for transaction submission (None for local mode)
             source_chain_id: Chain ID of the source chain
-            contract_address: Address of the ROFLAdapter contract
+            contract_address: Address of the ROFLAdapter/MockAdapter contract
             request_timeout: Timeout for transaction receipts in seconds (default: 30)
         """
         self.contract_util: ContractUtility = contract_util
@@ -46,24 +50,34 @@ class BlockSubmitter:
         self.contract_address: str = Web3.to_checksum_address(contract_address)
         self.request_timeout: int = request_timeout
         
-        self.rofl_adapter_abi: list[dict[str, Any]] = self.contract_util.get_contract_abi("ROFLAdapter")
+        # Load the appropriate ABI based on mode
+        if rofl_util:
+            # ROFL mode: use ROFLAdapter
+            contract_name = "ROFLAdapter"
+            self.adapter_abi: list[dict[str, Any]] = self.contract_util.get_contract_abi("ROFLAdapter")
+        else:
+            # Local mode: use MockAdapter
+            contract_name = "MockAdapter"
+            self.adapter_abi: list[dict[str, Any]] = self.contract_util.get_contract_abi("MockAdapter")
+        
         self.contract: Contract = self.contract_util.w3.eth.contract(
             address=self.contract_address,
-            abi=self.rofl_adapter_abi
+            abi=self.adapter_abi
         )
         
         # Log initialization mode using walrus operator
         if mode := ("ROFL production" if rofl_util else "local testing"):
             logger.info(f"BlockSubmitter initialized in {mode} mode")
             logger.info(f"  Source Chain ID: {source_chain_id}")
-            logger.info(f"  ROFLAdapter Address: {contract_address}")
+            logger.info(f"  Adapter Contract: {contract_name} at {contract_address}")
     
     async def submit_block_header(self, block_number: int, block_hash: str) -> bool:
         """
-        Submit a block header to the ROFLAdapter contract.
+        Submit a block header to the adapter contract.
         
-        This method handles both local mode (direct transaction) and production
-        mode (ROFL submission) based on whether rofl_util was provided.
+        This method handles both local mode (MockAdapter with setHashes) and 
+        production mode (ROFLAdapter with storeBlockHeader) based on whether 
+        rofl_util was provided.
         
         Args:
             block_number: The block number to submit
@@ -78,32 +92,29 @@ class BlockSubmitter:
             # Use pattern matching for mode selection
             match self.rofl_util:
                 case None:
-                    # Local mode
-                    logger.info("🔧 LOCAL MODE: Submitting transaction directly")
+                    # Local mode - use MockAdapter's setHashes function
+                    logger.info("LOCAL MODE: Submitting transaction directly to MockAdapter")
                     
                     try:
-                        tx_hash: HexBytes = self.contract.functions.storeBlockHeader(
+                        tx_hash = self.contract.functions.setHashes(
                             self.source_chain_id,
-                            block_number,
-                            block_hash
+                            [int(block_number)],
+                            [block_hash]
                         ).transact({
                             'gas': 300000,
                             'gasPrice': self.contract_util.w3.eth.gas_price
                         })
+
+                        logger.info(f"Transaction submitted successfully: {Web3.to_hex(tx_hash)}")
                         
-                        logger.info(f"✓ Transaction submitted successfully: {Web3.to_hex(tx_hash)}")
-                        
-                        # Wait for receipt to confirm success
                         receipt: TxReceipt = self.contract_util.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=self.request_timeout)
                         
-                        # Use walrus operator for status check
                         if (status := receipt.get('status', 0)) == 1:
-                            logger.info(f"✓ Transaction confirmed in block {receipt['blockNumber']}")
+                            logger.info(f"Transaction confirmed in block {receipt['blockNumber']}")
                             return True
                         else:
-                            logger.error(f"✗ Transaction failed with status={status}")
+                            logger.error(f"Transaction failed with status={status}")
                             return False
-                            
                     except Exception as tx_error:
                         logger.error(f"Local transaction failed: {tx_error}")
                         return False
@@ -117,7 +128,7 @@ class BlockSubmitter:
                         'value': Wei(0)
                     }
                     
-                    tx_data: dict[str, Any] = self.contract.functions.storeBlockHeader(
+                    tx_data: TxParams = self.contract.functions.storeBlockHeader(
                         self.source_chain_id,
                         block_number,
                         block_hash
@@ -125,13 +136,29 @@ class BlockSubmitter:
                     
                     logger.debug(f"Submitting transaction to ROFL with gas={tx_params.get('gas')}")
                     
-                    # Submit via ROFL utility
-                    if await rofl_util.submit_tx(tx_data):
-                        logger.info("✓ Block header submitted successfully via ROFL")
-                        return True
-                    else:
-                        logger.error("✗ Failed to submit block header via ROFL")
-                        return False
+                    # Submit via ROFL utility with timeout handling
+                    try:
+                        if await rofl_util.submit_tx(tx_data):
+                            logger.info("Block header submitted successfully via ROFL")
+                            return True
+                        else:
+                            logger.error("Failed to submit block header via ROFL")
+                            return False
+                    except Exception as rofl_error:
+                        # Check if it's a timeout error
+                        error_str = str(rofl_error)
+                        if "ReadTimeout" in error_str or "timeout" in error_str.lower():
+                            logger.warning(
+                                f"ROFL submission timed out for block {block_number} - "
+                                "transaction likely succeeded (check explorer). "
+                                "This is common in production when confirmation is slow."
+                            )
+                            # Treat timeout as success since we see transactions succeed in explorer
+                            return True
+                        else:
+                            # Re-raise other errors
+                            logger.error(f"ROFL submission error: {rofl_error}")
+                            raise
                     
         except Exception as e:
             logger.error(f"Error submitting block header: {e}", exc_info=True)

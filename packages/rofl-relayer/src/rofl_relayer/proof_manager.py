@@ -11,7 +11,7 @@ from typing import Any, List, TYPE_CHECKING
 import rlp
 from trie import HexaryTrie
 from web3 import Web3
-from web3.types import TxReceipt
+from web3.types import TxReceipt, TxParams, Wei
 from eth_typing import HexStr
 
 from .utils.blockchain_encoder import BlockchainEncoder
@@ -207,12 +207,13 @@ class ProofManager:
         
         if self.rofl_util:
             # ROFL mode: build transaction for rofl_util
-            tx_data = contract.functions.receivePing(receipt_proof_struct).build_transaction({
+            tx_params: TxParams = {
                 'from': '0x0000000000000000000000000000000000000000',  # ROFL will override
                 'gas': 3000000,
                 'gasPrice': self.contract_util.w3.eth.gas_price,
-                'value': 0
-            })
+                'value': Wei(0)
+            }
+            tx_data = contract.functions.receivePing(receipt_proof_struct).build_transaction(tx_params)
             success = await self.rofl_util.submit_tx(tx_data)
             if success:
                 logger.info("Proof submitted successfully via ROFL")

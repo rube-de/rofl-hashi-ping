@@ -42,19 +42,7 @@ async def main() -> None:
         SystemExit: On configuration or runtime errors
     """
     # Parse startup arguments
-    parser: argparse.ArgumentParser = argparse.ArgumentParser(
-        description="ROFL Header Oracle Backend Service - Bridge block headers between chains",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""Environment Variables:
-  SOURCE_RPC_URL         - RPC endpoint for source chain
-  SOURCE_CONTRACT_ADDRESS - BlockHeaderRequester contract address
-  CONTRACT_ADDRESS       - ROFLAdapter contract on Sapphire
-  NETWORK               - Target network (default: sapphire-testnet)
-  POLLING_INTERVAL      - Event polling interval (default: 12)
-  LOCAL_PRIVATE_KEY     - Private key for local mode (required with --local)
-  LOG_LEVEL            - Logging level (can be overridden with --log-level)
-        """
-    )
+    parser = argparse.ArgumentParser(description="ROFL Header Oracle")
     parser.add_argument(
         "--local",
         action="store_true",
@@ -81,15 +69,14 @@ async def main() -> None:
         await header_oracle.run()
         
     except ValueError as e:
-        logger.error(f"Configuration Error: {e}")
-        logger.error("Please check your environment variables:")
-        logger.error("  - SOURCE_RPC_URL: RPC endpoint for source chain")
+        logger.error(f"Configuration error: {e}")
+        logger.error("Required environment variables:")
+        logger.error("  - SOURCE_RPC_URL: Source chain RPC endpoint")
+        logger.error("  - TARGET_RPC_URL: Target chain RPC endpoint (default: testnet)")
         logger.error("  - SOURCE_CONTRACT_ADDRESS: BlockHeaderRequester contract address")
-        logger.error("  - CONTRACT_ADDRESS: ROFLAdapter contract on Sapphire")
-        logger.error("  - NETWORK: Target network (default: sapphire-testnet)")
-        logger.error("  - POLLING_INTERVAL: Event polling interval (default: 12)")
+        logger.error("  - CONTRACT_ADDRESS: ROFLAdapter contract address")
         if args.local:
-            logger.error("  - LOCAL_PRIVATE_KEY: Required for local mode")
+            logger.error("  - LOCAL_PRIVATE_KEY: Private key for local mode")
         sys.exit(1)
         
     except KeyboardInterrupt:

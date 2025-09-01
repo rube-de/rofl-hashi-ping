@@ -68,27 +68,24 @@ class TargetChainConfig:
     """Configuration for the target Sapphire chain.
     
     Attributes:
-        network: Network name (e.g., 'sapphire-testnet', 'sapphire-mainnet')
+        rpc_url: HTTP(S) RPC endpoint for the target chain
         contract_address: Checksummed address of ROFLAdapter contract
     """
     
-    network: str
+    rpc_url: str
     contract_address: str
-    
-    # Supported networks
-    SUPPORTED_NETWORKS: ClassVar[set[str]] = {
-        'sapphire-localnet',
-        'sapphire-testnet', 
-        'sapphire-mainnet'
-    }
     
     def __post_init__(self) -> None:
         """Validate target chain configuration."""
-        # Validate network
-        if self.network not in self.SUPPORTED_NETWORKS:
+        # Validate RPC URL
+        if not self.rpc_url:
+            raise ValueError("Target RPC URL is required (TARGET_RPC_URL)")
+        
+        parsed = urlparse(self.rpc_url)
+        if parsed.scheme not in ('http', 'https', 'ws', 'wss'):
             raise ValueError(
-                f"Unsupported network: {self.network}. "
-                f"Supported networks: {', '.join(sorted(self.SUPPORTED_NETWORKS))}"
+                f"Invalid RPC URL scheme: {parsed.scheme}. "
+                "Must be http, https, ws, or wss"
             )
         
         # Validate and checksum contract address
@@ -220,7 +217,11 @@ class OracleConfig:
         )
         
         # Load target chain config
-        network = os.environ.get("NETWORK", "sapphire-testnet")
+        # Target chain RPC URL - default to testnet if not specified
+        target_rpc_url = os.environ.get(
+            "TARGET_RPC_URL", 
+            "https://testnet.sapphire.oasis.io"
+        )
         target_contract = os.environ.get("CONTRACT_ADDRESS", "")
         
         if not target_contract:
@@ -230,7 +231,7 @@ class OracleConfig:
             )
         
         target_config = TargetChainConfig(
-            network=network,
+            rpc_url=target_rpc_url,
             contract_address=target_contract
         )
         
@@ -271,7 +272,7 @@ class OracleConfig:
             logger.info(f"  Chain ID: {self.source_chain.chain_id}")
         
         logger.info("Target Chain (Sapphire):")
-        logger.info(f"  Network: {self.target_chain.network}")
+        logger.info(f"  RPC URL: {self.target_chain.rpc_url}")
         logger.info(f"  Contract: {self.target_chain.contract_address}")
         
         logger.info("Monitoring Settings:")

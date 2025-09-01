@@ -7,16 +7,15 @@ events, specifically BlockHeaderRequested events from the source chain.
 
 import logging
 from collections import OrderedDict
+from collections.abc import Mapping
 from typing import Any
 
 from web3 import Web3
+from web3.types import EventData
 
 from .models import BlockHeaderEvent
-from .utils.event_listener_utility import parse_event_topic_as_int
 
-# Get logger for this module
 logger = logging.getLogger(__name__)
-
 
 class EventProcessor:
     """Processes and validates blockchain events for the oracle.
@@ -58,22 +57,21 @@ class EventProcessor:
             f"with dedupe window of {dedupe_window} events"
         )
     
-    async def process_event(self, event_data: Any) -> BlockHeaderEvent | None:
-        """Process a raw event into a validated BlockHeaderEvent.
+    async def process_event(self, event_data: EventData) -> BlockHeaderEvent | None:
+        """Process an event into a validated BlockHeaderEvent.
         
-        This method handles both dict and EventData formats from different
-        event sources (WebSocket vs polling), validates the event structure,
-        filters by chain ID, and checks for duplicates.
+        This method handles EventData from web3.py's contract.events.get_logs(),
+        validates the event structure, filters by chain ID, and checks for duplicates.
         
         Args:
-            event_data: Raw event data from the event listener
+            event_data: Parsed event data from the event listener (EventData from web3.py)
             
         Returns:
             BlockHeaderEvent if valid and not duplicate, None otherwise
         """
         try:
             # Parse the raw event data
-            parsed_event = self._parse_event_data(event_data)
+            parsed_event: BlockHeaderEvent | None = self._parse_event_data(event_data)
             if not parsed_event:
                 return None
             
@@ -104,76 +102,49 @@ class EventProcessor:
             logger.error(f"Error processing event: {e}", exc_info=True)
             return None
     
-    def _parse_event_data(self, event_data: Any) -> BlockHeaderEvent | None:
-        """Parse raw event data into a BlockHeaderEvent.
-        
-        Handles both dict format (from WebSocket) and EventData format
-        (from polling) using pattern matching.
+    def _parse_event_data(self, event_data: EventData) -> BlockHeaderEvent | None:
+        """Parse event data into a BlockHeaderEvent.
         
         Args:
-            event_data: Raw event data
+            event_data: Parsed event data
             
         Returns:
             Parsed BlockHeaderEvent or None if parsing fails
         """
         try:
-            # Use pattern matching to handle different event data formats
-            topics: list[Any]
-            event_block: int
-            tx_hash: str
-            log_index: int
-            data: str
-            
-            match event_data:
-                # Dict format from WebSocket
-                case {'topics': t, 'blockNumber': b, 'transactionHash': h, 'logIndex': i, 'data': d}:
-                    topics = t if isinstance(t, list) else []
-                    event_block = b
-                    tx_hash = h
-                    log_index = i
-                    data = d
-                # Dict with partial fields
-                case dict():
-                    topics = event_data.get('topics', [])
-                    event_block = event_data.get('blockNumber', 0)
-                    tx_hash = event_data.get('transactionHash', '')
-                    log_index = event_data.get('logIndex', 0)
-                    data = event_data.get('data', '')
-                # EventData format from polling (object with attributes)
-                case _:
-                    topics = getattr(event_data, 'topics', [])
-                    # Handle case where topics is not a list
-                    if not isinstance(topics, list):
-                        topics = list(topics) if topics else []
-                    event_block = getattr(event_data, 'blockNumber', 0)
-                    tx_hash_raw = getattr(event_data, 'transactionHash', b'')
-                    if isinstance(tx_hash_raw, bytes):
-                        tx_hash = tx_hash_raw.hex()
-                    else:
-                        tx_hash = str(tx_hash_raw)
-                    log_index = getattr(event_data, 'logIndex', 0)
-                    data = getattr(event_data, 'data', '')
-            
-            # Validate we have enough topics (signature + 2 indexed params)
-            if len(topics) < 3:
-                logger.warning(f"Insufficient topics in event: {len(topics) if topics else 0}")
+            args: Mapping[str, Any] = event_data.get('args', {})
+            if not args:
+                logger.warning("Event missing 'args' field")
+                logger.debug(f"Event data keys: {list(event_data.keys()) if hasattr(event_data, 'keys') else 'No keys method'}")
+                logger.debug(f"Event data type: {type(event_data)}")
                 self.events_invalid += 1
                 return None
             
-            # Parse indexed parameters from topics
-            chain_id: int = parse_event_topic_as_int(topics[1])
-            requested_block: int = parse_event_topic_as_int(topics[2])
+            chain_id: int = args.get('chainId', 0)
+            requested_block: int = args.get('blockNumber', 0)  # This is the requested block from the event
+            requester: str = args.get('requester', '')
+            context_raw: bytes | str = args.get('context', b'')
             
-            # Parse non-indexed parameters from data
-            requester: str
             context: str
-            requester, context = self._decode_event_data(data)
+            if isinstance(context_raw, bytes):
+                context = f'0x{context_raw.hex()}'
+            else:
+                context = str(context_raw)
             
-            # Normalize tx_hash format using walrus operator
-            if isinstance(tx_hash, bytes):
-                tx_hash = f'0x{tx_hash.hex()}'
-            elif not tx_hash.startswith('0x'):
-                tx_hash = f'0x{tx_hash}'
+            if Web3.is_address(requester):
+                requester = Web3.to_checksum_address(requester)
+            
+            event_block: int = event_data.get('blockNumber', 0)  # Block where event was emitted
+            tx_hash_raw: bytes | str = event_data.get('transactionHash', b'')
+            log_index: int = event_data.get('logIndex', 0)
+            
+            tx_hash: str
+            if isinstance(tx_hash_raw, bytes):
+                tx_hash = f'0x{tx_hash_raw.hex()}'
+            elif isinstance(tx_hash_raw, str):
+                tx_hash = tx_hash_raw
+            else:
+                tx_hash = ''
             
             return BlockHeaderEvent(
                 chain_id=chain_id,
@@ -189,46 +160,6 @@ class EventProcessor:
             logger.error(f"Failed to parse event data: {e}")
             self.events_invalid += 1
             return None
-    
-    def _decode_event_data(self, data: str) -> tuple[str, str]:
-        """Decode the non-indexed event parameters from the data field.
-        
-        The data field contains the ABI-encoded non-indexed parameters:
-        - requester (address)
-        - context (bytes32)
-        
-        Args:
-            data: Hex-encoded event data
-            
-        Returns:
-            Tuple of (requester_address, context_hash)
-        """
-        try:
-            # Remove 0x prefix if present using walrus operator
-            if data.startswith('0x'):
-                data = data[2:]
-            
-            # Each parameter is 32 bytes (64 hex chars)
-            if len(data) < 128:  # Need at least 2 parameters
-                return '', ''
-            
-            # Extract requester address (first 32 bytes, last 20 bytes are the address)
-            requester_hex: str = data[24:64]  # Skip 12 bytes of padding
-            requester = f'0x{requester_hex}'
-            
-            # Extract context (second 32 bytes)
-            context_hex: str = data[64:128]
-            context = f'0x{context_hex}'
-            
-            # Validate and checksum the requester address
-            if Web3.is_address(requester):
-                requester = Web3.to_checksum_address(requester)
-            
-            return requester, context
-            
-        except Exception as e:
-            logger.error(f"Failed to decode event data: {e}")
-            return '', ''
     
     def _should_process_chain(self, chain_id: int) -> bool:
         """Check if an event's chain ID matches our configured chain.
@@ -251,15 +182,12 @@ class EventProcessor:
     def _is_duplicate(self, event: BlockHeaderEvent) -> bool:
         """Check if an event has already been processed.
         
-        Uses O(1) OrderedDict lookup for efficient duplicate detection.
-        
         Args:
             event: The event to check
             
         Returns:
             True if duplicate, False otherwise
         """
-        # O(1) lookup in OrderedDict
         return event.unique_key in self.processed_events
     
     def _mark_processed(self, event: BlockHeaderEvent) -> None:
