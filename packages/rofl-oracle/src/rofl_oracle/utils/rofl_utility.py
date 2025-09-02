@@ -53,7 +53,6 @@ class RoflUtility:
             base_url: str = self.url if self.url and self.url.startswith('http') else "http://localhost"
             full_url: str = base_url + path
             logger.debug(f"Posting to {full_url}: {json.dumps(payload)}")
-            # Use 60-second timeout for blockchain operations (production can be slow)
             response: httpx.Response = await client.post(full_url, json=payload, timeout=60.0)
             response.raise_for_status()
             return response.json()
@@ -132,7 +131,6 @@ class RoflUtility:
         # Decode CBOR response to check for success
         decoded_response: dict[str, Any] = self._decode_cbor_response(response_hex)
         
-        # Use pattern matching for response status (Python 3.10+)
         match decoded_response:
             case {"ok": _}:
                 logger.info("Transaction submitted successfully to ROFL")
