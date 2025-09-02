@@ -157,13 +157,8 @@ class TestBlockSubmitter:
         result = await submitter.submit_block_header(block_number, block_hash)
         
         assert result is True
-        # We expect the block hash to be converted to bytes32
-        from web3 import Web3
-        from web3.types import HexStr
-        expected_block_hash_bytes = Web3.to_bytes(hexstr=HexStr(block_hash))
         # The block_hash (hex string) is passed directly to the function
         mock_contract.functions.storeBlockHeader.assert_called_once_with(
-            source_chain_id, block_number, expected_block_hash_bytes
             source_chain_id, block_number, block_hash
         )
         mock_rofl_util.submit_tx.assert_called_once()
@@ -235,16 +230,10 @@ class TestBlockSubmitter:
         result = await submitter.submit_block_header(block_number, block_hash)
         
         assert result is True
-        # MockAdapter uses setHashes with arrays
-        # We expect the block hash to be converted to bytes32
-        from web3 import Web3
-        from web3.types import HexStr
-        expected_block_hash_bytes = Web3.to_bytes(hexstr=HexStr(block_hash))
         # MockAdapter uses setHashes with arrays. We pass a list of hex strings.
         mock_contract.functions.setHashes.assert_called_once_with(
             source_chain_id,  # domain
             [block_number],   # ids array
-            [expected_block_hash_bytes]  # hashes array (as bytes32[])
             [block_hash]      # hashes array (as list of hex strings)
         )
         mock_transact.transact.assert_called_once_with({
