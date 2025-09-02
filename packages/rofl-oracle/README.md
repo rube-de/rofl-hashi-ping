@@ -33,7 +33,7 @@ The oracle is configured through environment variables defined in `compose.yaml`
 | `PYTHONUNBUFFERED` | Disable Python output buffering for immediate log visibility | `1` | No |
 | `SOURCE_RPC_URL` | RPC endpoint for the source chain | `https://ethereum.publicnode.com` | No |
 | `SOURCE_CONTRACT_ADDRESS` | Address of the BlockHeaderRequester contract on source chain | - | **Yes** |
-| `NETWORK` | Target Oasis network (sapphire-testnet, sapphire-mainnet) | `sapphire-testnet` | No |
+| `TARGET_RPC_URL` | RPC endpoint for the target chain | `https://testnet.sapphire.oasis.io` | No |
 | `CONTRACT_ADDRESS` | Address of the ROFLAdapter contract on Oasis Sapphire | - | **Yes** |
 | `POLLING_INTERVAL` | Seconds between event checks | `12` | No |
 | `LOCAL_PRIVATE_KEY` | Private key for local testing mode | - | **Yes** (Local Mode Only) |
@@ -126,7 +126,14 @@ uv sync
 
 # Run oracle
 uv run python main.py
+
+# Run tests
+uv run pytest
+
+# Run tests with coverage
+uv run pytest --cov=src --cov-report=term-missing
 ```
+
 
 ## Troubleshooting
 

@@ -22,7 +22,7 @@ async def main():
     )
     args = parser.parse_args()
     
-    logger.info(f"Starting in {'LOCAL' if args.local else 'ROFL'} mode")
+    logger.info(f"=== ROFL Relayer Starting {'(LOCAL MODE)' if args.local else ''} ===")
     
     relayer = None
     

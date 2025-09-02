@@ -1,17 +1,47 @@
 #!/usr/bin/env python3
+"""Entry point for the ROFL Header Oracle backend service.
+
+This module provides the main entry point for the oracle service
+that runs as a containerized backend in either production (ROFL)
+or local testing mode.
+"""
 
 import argparse
 import asyncio
+import logging
+import os
+import sys
+
+# Configure logging before any other imports create loggers
+def setup_logging(level: str = "INFO") -> None:
+    """Configure logging for the application.
+    
+    Args:
+        level: Logging level as string (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    """
+    log_level: int = getattr(logging, level.upper(), logging.INFO)
+    logging.basicConfig(
+        level=log_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+
+# Get logger for this module
+logger = logging.getLogger(__name__)
+
+from src.rofl_oracle.config import OracleConfig
 from src.rofl_oracle.header_oracle import HeaderOracle
 
 
-async def main():
+async def main() -> None:
+    """Main entry point for the ROFL Header Oracle backend service.
+    
+    Parses startup arguments, loads configuration from environment,
+    and starts the oracle service that continuously polls for events.
+    
+    Raises:
+        SystemExit: On configuration or runtime errors
     """
-    Main method for the Python CLI tool.
-
-    :return: None
-    """
-    # Parse command line arguments
+    # Parse startup arguments
     parser = argparse.ArgumentParser(description="ROFL Header Oracle")
     parser.add_argument(
         "--local",
@@ -19,26 +49,45 @@ async def main():
         default=False,
         help="Run in local mode without ROFL utilities (for testing)"
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--log-level",
+        default=os.environ.get("LOG_LEVEL", "INFO"),
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Set the logging level (default: INFO)"
+    )
+    args: argparse.Namespace = parser.parse_args()
     
-    if args.local:
-        print("=== ROFL Header Oracle Starting (LOCAL MODE) ===")
-        print("Local mode enabled: ROFL utilities disabled")
-    else:
-        print("=== ROFL Header Oracle Starting ===")
-        
-    print("Creating HeaderOracle instance...")
+    # Set up logging with specified level
+    setup_logging(args.log_level)
+    
+    logger.info(f"=== ROFL Header Oracle Starting {'(LOCAL MODE)' if args.local else ''} ===")
     
     try:
-        headerOracle = HeaderOracle(local_mode=args.local)
-        print("HeaderOracle instance created, starting main loop...")
-        await headerOracle.run()
+        # Load configuration from environment
+        config: OracleConfig = OracleConfig.from_env(local_mode=args.local)
+        header_oracle: HeaderOracle = HeaderOracle(config)
+        await header_oracle.run()
+        
+    except ValueError as e:
+        logger.error(f"Configuration error: {e}")
+        logger.error("Required environment variables:")
+        logger.error("  - SOURCE_RPC_URL: Source chain RPC endpoint")
+        logger.error("  - TARGET_RPC_URL: Target chain RPC endpoint (default: testnet)")
+        logger.error("  - SOURCE_CONTRACT_ADDRESS: BlockHeaderRequester contract address")
+        logger.error("  - CONTRACT_ADDRESS: ROFLAdapter contract address")
+        if args.local:
+            logger.error("  - LOCAL_PRIVATE_KEY: Private key for local mode")
+        sys.exit(1)
+        
+    except KeyboardInterrupt:
+        logger.info("\nReceived interrupt signal, shutting down gracefully...")
+        sys.exit(0)
+        
     except Exception as e:
-        print(f"\nFATAL ERROR: {e}")
-        import traceback
-        traceback.print_exc()
-        raise
+        logger.error(f"Fatal Error: {e}", exc_info=True)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
+    # Run the main async function
     asyncio.run(main())

@@ -31,16 +31,20 @@ deployments:
           min_tcb_evaluation_data_number: 18
           tdx: {}
       enclaves:
-        - b/gAoG8iR1r2/6sUmXyh6mo1Xr3s4ZouUxxkcHrXhcUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
-        - 9QcXgJWlog61JHjyicbx2pWoJP5UTbNKR3P62eZIrJQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+        - 8lCDoRPziL/uRUsxUmq0EbH9I426pmmyk0ITeP3+YQkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+        - ShI/WitIEeCg6Y5k28utSLxhevdMr9PvJNTyn5MTbcoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
       endorsements:
         - any: {}
       fees: endorsing_node
       max_expiration: 3
     secrets:
       - name: CONTRACT_ADDRESS
-        value: pGJwa1ggK2DxUQ/kPsj8wg0noD3a5GO2iJQr+3f+KmgFU2eyaiRkbmFtZVggGJznJsR5w7u7IhMRtzDNX5JMCZh30+aoT8blVdqCufBlbm9uY2VP1K4y8Ttrk3K3nqZvLDFZZXZhbHVlWDp0kA9vxLZH04AYXBREXgh5RuOmI14m1tFdcgonI/ufAzmEcQRwkREWc1YXm9aiQLbXyTaFpMPXQ+/X
+        value: pGJwa1ggYMqi1wQywV++OndGYq/nx/9AMHAVYzh16Y+brrvGmwRkbmFtZVggPM/H3xrMk3NVUlqa8m3JD06DAkFfvzmcCkGDKiBIakplbm9uY2VPz7eFa2WrSs3azf6wS11gZXZhbHVlWDp3Ol5Cg8y95k/ZaRe4/zLXnoSZDLEQ7j9WLchMYwnyA6c/AR7hgS1cER7nhRWM26LhXPOhOJ9EO+pq
       - name: SOURCE_RPC_URL
-        value: pGJwa1ggXCt/56urhP+aJj5ElVy5LiD6MfdojMfAOW0mxLxEAzxkbmFtZVgeScHrM25oAX5RcBz3wPLlQBHvtETy32V8645MntE6ZW5vbmNlT3UrptEIGdt9l2U2Tl6UUWV2YWx1ZVhVBteIV2zkgZAxrbtMKGgJLdM7h/Fsr2y3pESVRrnhRGNSs+yk9MhiKS4SddDv/08JQHN4/2lng/3nYz7i83XGK9qict3Mv/yO1XEalK9suyadW93//w==
+        value: pGJwa1ggbMy2osWMlt4JTLWH+0QcTTv+NlLfcvNyRk/qmrpzij1kbmFtZVgeBXER+TIn776BrxHCFmL4urxPhywh0BX+FNnLWGH4ZW5vbmNlT4WdCqXWpM8ZEZhA9yskaGV2YWx1ZVhVmcNwAcDPLGlFQv7xDYpJZJ+v/KE4TNnMkqH1NXQInu3qxu83egvzO2bBzyUOsnJu/3BOQwEIV8zPVmGMBsdBfXiAtqMNlrwVumAjNRxP/FlrGR8kxw==
       - name: SOURCE_CONTRACT_ADDRESS
-        value: pGJwa1ggJtMoxgXDkTQVDNxmN9gk3k8lj9UUenic76wYLA4dRkpkbmFtZVgnJM+w1p3KgsT52p1chfb66a6cJ2I/ZKiz7sn1Q/qksghXffef6kZSZW5vbmNlT822YDjbVx2af4XKq5sGPWV2YWx1ZVg6pFSro0GaF8P7+ihKrQfMw1JBYlW5A8LYJAhtJrkfqXQxvie4HaoTY21udNQ0Q3+7+mjt1dxtivAASw==
+        value: pGJwa1ggyM/d2z7uiIUaYDEruOrKmr4ibxGFW0BtrmJJjzdgeVRkbmFtZVgnQ5g36Y+y3egUpmrlu8akU51mV2zZpUyUfC2M/PrkNPGydI+clVUpZW5vbmNlTyxZgT9r5LN8FTMO7AnJsmV2YWx1ZVg694twguQ6RlYSf4Q1lOjMxuB7qlqBAl/lNsW6SVfyygBTb5Dzp6W0PR1BwC4P7h7rxegZBhGoUd8x/w==
+      - name: POLLING_INTERVAL
+        value: pGJwa1ggWahmYQjj0bhKauJvZrTDqvlWeti7g0rRPHX6w2zfj2xkbmFtZVggPhJ++WznaywVNoxzXk7wN5KmQBvy2VymWQklqfndxAllbm9uY2VPJMuSyHoWMaIVTXowtKCWZXZhbHVlUg/Qd9cGSkfm4kSEqXmcMBhhtw==
+      - name: TARGET_RPC_URL
+        value: pGJwa1ggsUzyKq8b733HgOI1TRvnFKORhcnK5Sup4yzDVrXQm0RkbmFtZVgex+kYcA551WpssrHVcSRsZM3M2hSkgPlDexsw7MkmZW5vbmNlT1rzTtN1/n3g6WWlMD5opWV2YWx1ZVgxh6Y7gxuiA+g+bW3HskrSaKJouCWJ/c5x0SOyxlv2IHgjwm3wqqV8YbHeGQOMeEVGhw==

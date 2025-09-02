@@ -5,10 +5,11 @@ Polling-based event listener utility for blockchain event monitoring.
 
 import asyncio
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 from web3 import Web3
-from web3.types import EventData, LogReceipt
+from web3.types import EventData
 
 
 class PollingEventListener:
@@ -22,7 +23,7 @@ class PollingEventListener:
         rpc_url: str,
         contract_address: str,
         event_name: str,
-        abi: List[Dict[str, Any]],
+        abi: list[dict[str, Any]],
         lookback_blocks: int = 100
     ):
         """
@@ -55,7 +56,7 @@ class PollingEventListener:
         self.event_obj = getattr(self.contract.events, event_name)
         
         # State tracking
-        self.last_processed_block: Optional[int] = None
+        self.last_processed_block: int | None = None
         self.is_running = False
         
         # Setup logging
@@ -177,7 +178,7 @@ class PollingEventListener:
         self.logger.info(f"Stopping polling for {self.event_name} events")
         self.is_running = False
     
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """
         Get current status of the polling listener.
         

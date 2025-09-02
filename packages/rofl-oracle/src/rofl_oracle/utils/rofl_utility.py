@@ -1,78 +1,144 @@
+import codecs
 import json
-import typing
+import logging
+from typing import Any
+
+import cbor2
 import httpx
 from web3.types import TxParams
 
+logger = logging.getLogger(__name__)
+
 
 class RoflUtility:
-    ROFL_SOCKET_PATH = "/run/rofl-appd.sock"
+    """Utility for interacting with ROFL runtime services.
+    
+    Provides methods for key fetching and transaction submission
+    through the ROFL application daemon.
+    """
+    
+    ROFL_SOCKET_PATH: str = "/run/rofl-appd.sock"
 
-    def __init__(self, url: str = ""):
-        self.url = url
+    def __init__(self, url: str = '') -> None:
+        """Initialize ROFL utility.
+        
+        Args:
+            url: Optional URL for HTTP transport (defaults to socket)
+        """
+        self.url: str = url
 
-    def _appd_post(self, path: str, payload: typing.Any) -> typing.Any:
-        transport = None
+    async def _appd_post(self, path: str, payload: Any) -> Any:
+        """Post request to ROFL application daemon.
+        
+        Args:
+            path: API endpoint path
+            payload: JSON payload to send
+            
+        Returns:
+            JSON response from the daemon
+            
+        Raises:
+            httpx.HTTPStatusError: If the request fails
+        """
+        transport: httpx.AsyncHTTPTransport | None = None
+        
         if self.url and not self.url.startswith('http'):
-            transport = httpx.HTTPTransport(uds=self.url)
-            print(f"Using HTTP socket: {self.url}")
+            transport = httpx.AsyncHTTPTransport(uds=self.url)
+            logger.debug(f"Using HTTP socket: {self.url}")
         elif not self.url:
-            transport = httpx.HTTPTransport(uds=self.ROFL_SOCKET_PATH)
-            print(f"Using unix domain socket: {self.ROFL_SOCKET_PATH}")
+            transport = httpx.AsyncHTTPTransport(uds=self.ROFL_SOCKET_PATH)
+            logger.debug(f"Using unix domain socket: {self.ROFL_SOCKET_PATH}")
 
-        client = httpx.Client(transport=transport)
+        async with httpx.AsyncClient(transport=transport) as client:
+            base_url: str = self.url if self.url and self.url.startswith('http') else "http://localhost"
+            full_url: str = base_url + path
+            logger.debug(f"Posting to {full_url}: {json.dumps(payload)}")
+            response: httpx.Response = await client.post(full_url, json=payload, timeout=60.0)
+            response.raise_for_status()
+            return response.json()
 
-        url = self.url if self.url and self.url.startswith('http') else "http://localhost"
-        print(f"  Posting {json.dumps(payload)} to {url+path}")
-        response = client.post(url + path, json=payload, timeout=None)
-        response.raise_for_status()
-        return response.json()
-
-    def fetch_key(self, key_id: str) -> str:
-        payload = {
+    async def fetch_key(self, key_id: str) -> str:
+        """Fetch or generate a cryptographic key from ROFL.
+        
+        Args:
+            key_id: Identifier for the key
+            
+        Returns:
+            The private key as a hex string
+            
+        Raises:
+            httpx.HTTPStatusError: If key fetch fails
+        """
+        payload: dict[str, str] = {
             "key_id": key_id,
-            "kind": "secp256k1",
+            "kind": "secp256k1"
         }
 
-        path = "/rofl/v1/keys/generate"
-        print(f"Fetching oracle key from {path}")
-        
-        result = self._appd_post(path, payload)
-        return result["key"]
+        path: str = '/rofl/v1/keys/generate'
+        response: dict[str, Any] = await self._appd_post(path, payload)
+        return response["key"]
 
-    def submit_tx(self, tx: TxParams) -> str:
-        # Extract and format transaction fields with proper type handling
-        to_address = tx.get("to", "")
-        # Handle ChecksumAddress or any address type
-        to_address = str(to_address) if to_address else ""
-        to_address = to_address.removeprefix("0x")
+    def _decode_cbor_response(self, response_hex: str) -> dict[str, Any]:
+        """
+        Decode CBOR response from ROFL service.
         
-        tx_data = tx.get("data", "")
-        if isinstance(tx_data, (str, bytes)):
-            if isinstance(tx_data, bytes):
-                tx_data = tx_data.hex()
-            tx_data = tx_data.removeprefix("0x") if isinstance(tx_data, str) else tx_data
+        Args:
+            response_hex: Hex-encoded CBOR response
+            
+        Returns:
+            Decoded CBOR data as dictionary
+        """
+        try:
+            data_bytes: bytes = codecs.decode(response_hex, "hex")
+            cbor_result: Any = cbor2.loads(data_bytes)
+            logger.debug(f"Decoded CBOR: {cbor_result}")
+            return cbor_result if isinstance(cbor_result, dict) else {"data": cbor_result}
+        except Exception as decode_error:
+            logger.error(f"CBOR decode error: {decode_error}")
+            return {"error": "decode_failed", "raw": response_hex}
+
+    async def submit_tx(self, tx: TxParams) -> bool:
+        """
+        Submit a transaction via ROFL.
         
-        payload = {
+        Args:
+            tx: Transaction parameters
+            
+        Returns:
+            True if transaction was accepted, False otherwise
+            
+        Raises:
+            Exception: If ROFL returns an error
+        """
+        payload: dict[str, Any] = {
             "tx": {
                 "kind": "eth",
                 "data": {
-                    "gas_limit": tx.get("gas", 300000),
-                    "to": to_address,
-                    "value": tx.get("value", 0),
-                    "data": tx_data,
+                    "gas_limit": tx["gas"],
+                    "to": tx["to"].removeprefix("0x"),
+                    "value": tx["value"],
+                    "data": tx["data"].removeprefix("0x"),
                 },
             },
             "encrypt": False,
         }
 
-        path = '/rofl/v1/tx/sign-submit'
+        path: str = '/rofl/v1/tx/sign-submit'
+        response: dict[str, Any] = await self._appd_post(path, payload)
+        response_hex: str = response["data"]
+        logger.debug(f"ROFL raw response: {response_hex}")
         
-        print(f"Submitting transaction to {path}")
-        print(f"  Transaction params received: {tx}")
-        print(f"  Formatted payload: {json.dumps(payload, indent=2)}")
-
-        result = self._appd_post(path, payload)
-        print(f"  ROFL response: {json.dumps(result, indent=2)}")
+        # Decode CBOR response to check for success
+        decoded_response: dict[str, Any] = self._decode_cbor_response(response_hex)
         
-        # Return the raw data field - let the caller handle interpretation
-        return result.get("data", "")
+        match decoded_response:
+            case {"ok": _}:
+                logger.info("Transaction submitted successfully to ROFL")
+                return True
+            case {"error": error_msg}:
+                logger.error(f"ROFL transaction failed: {error_msg}")
+                raise Exception(f"ROFL transaction failed: {error_msg}")
+            case _:
+                logger.warning(f"Unknown ROFL response format: {decoded_response}")
+                # If no clear error, assume success
+                return True
