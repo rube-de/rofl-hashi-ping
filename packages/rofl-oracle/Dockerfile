@@ -21,7 +21,7 @@ RUN uv sync --frozen
 
 # Copy source code
 COPY main.py ./
-COPY src/ ./src/
+COPY rofl_oracle/ ./rofl_oracle/
 COPY contracts/ ./contracts/
 
 # Run the oracle

@@ -80,7 +80,7 @@ python main.py
 The configuration is loaded using the `OracleConfig.from_env()` class method:
 
 ```python
-from src.rofl_oracle.config import OracleConfig
+from rofl_oracle.config import OracleConfig
 
 # Load configuration from environment
 config = OracleConfig.from_env(local_mode=False)

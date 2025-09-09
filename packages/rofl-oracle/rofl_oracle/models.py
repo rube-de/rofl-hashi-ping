@@ -12,11 +12,11 @@ from typing import Any
 @dataclass(frozen=True, slots=True)
 class BlockHeaderEvent:
     """Represents a BlockHeaderRequested event from the blockchain.
-    
+
     This immutable data class captures all relevant information from a
     BlockHeaderRequested event, providing a type-safe representation for
     processing throughout the oracle system.
-    
+
     Attributes:
         chain_id: The chain ID where the block header is requested from
         block_number: The specific block number being requested
@@ -26,7 +26,7 @@ class BlockHeaderEvent:
         transaction_hash: Hash of the transaction that emitted the event
         log_index: Index of the log entry in the block
     """
-    
+
     chain_id: int
     block_number: int
     requester: str
@@ -34,7 +34,7 @@ class BlockHeaderEvent:
     event_block_number: int
     transaction_hash: str
     log_index: int
-    
+
     def __str__(self) -> str:
         """Human-readable string representation."""
         return (
@@ -43,7 +43,7 @@ class BlockHeaderEvent:
             f"requester={self.requester[:8]}..., "
             f"event_block={self.event_block_number})"
         )
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
@@ -53,13 +53,13 @@ class BlockHeaderEvent:
             "context": self.context,
             "event_block_number": self.event_block_number,
             "transaction_hash": self.transaction_hash,
-            "log_index": self.log_index
+            "log_index": self.log_index,
         }
-    
+
     @property
     def unique_key(self) -> tuple[int, int, str, int]:
         """Generate a unique key for deduplication.
-        
+
         Returns a tuple that uniquely identifies this event for
         deduplication purposes.
         """
@@ -67,17 +67,17 @@ class BlockHeaderEvent:
             self.chain_id,
             self.block_number,
             self.transaction_hash,
-            self.log_index
+            self.log_index,
         )
 
 
 @dataclass(frozen=True, slots=True)
 class BlockHeader:
     """Represents a block header from the blockchain.
-    
+
     This immutable data class encapsulates block header information
     retrieved from the source chain for submission to the target chain.
-    
+
     Attributes:
         chain_id: The chain ID this block belongs to
         block_number: The block number
@@ -85,13 +85,13 @@ class BlockHeader:
         timestamp: Block timestamp (Unix timestamp)
         parent_hash: Parent block hash (with 0x prefix)
     """
-    
+
     chain_id: int
     block_number: int
     block_hash: str
     timestamp: int
     parent_hash: str
-    
+
     def __str__(self) -> str:
         """Human-readable string representation."""
         return (
@@ -99,7 +99,7 @@ class BlockHeader:
             f"number={self.block_number}, "
             f"hash={self.block_hash[:10]}...)"
         )
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
@@ -107,5 +107,5 @@ class BlockHeader:
             "block_number": self.block_number,
             "block_hash": self.block_hash,
             "timestamp": self.timestamp,
-            "parent_hash": self.parent_hash
+            "parent_hash": self.parent_hash,
         }

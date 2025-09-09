@@ -29,7 +29,7 @@ class ContractUtility:
 When initialized with a private key, the utility can sign and send transactions:
 
 ```python
-from src.rofl_oracle.utils.contract_utility import ContractUtility
+from rofl_oracle.utils.contract_utility import ContractUtility
 
 # Full mode with signing capability
 utility = ContractUtility(
@@ -201,7 +201,7 @@ The `PollingEventListener` provides reliable event monitoring through periodic p
 ### Basic Usage
 
 ```python
-from src.rofl_oracle.utils.polling_event_listener import PollingEventListener
+from rofl_oracle.utils.polling_event_listener import PollingEventListener
 
 # Initialize listener
 listener = PollingEventListener(
@@ -325,7 +325,7 @@ uv run pytest test/test_contract_utility.py::TestContractUtility::test_init_read
 #### Mocking Web3
 
 ```python
-@patch('src.rofl_oracle.utils.contract_utility.Web3')
+@patch('rofl_oracle.utils.contract_utility.Web3')
 def test_with_mock_web3(mock_web3):
     mock_instance = MagicMock()
     mock_web3.return_value = mock_instance
