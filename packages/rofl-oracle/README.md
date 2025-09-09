@@ -134,39 +134,9 @@ uv run pytest
 uv run pytest --cov=src --cov-report=term-missing
 ```
 
-
-## Troubleshooting
-
-### Oracle Appears to Hang
-
-**Symptom**: Container shows "everything is up and running" but no further output.
-
-**Cause**: Python output buffering in containerized environments.
-
-**Solution**: Ensure `PYTHONUNBUFFERED=1` is set in environment variables. This forces immediate log output.
-
-### No Events Found
-
-**Normal Operation**: The oracle will continuously poll and show "Checking for events" messages even when no events are found. This is expected behavior.
-
-### ROFL Connection Issues
-
-Check that:
-- `/run/rofl-appd.sock` is properly mounted
-- ROFL runtime is accessible
-- Contract addresses are correct
-
 ## Architecture Integration
 
 This oracle is designed to work with:
 - Hashi cross-chain message verification system
 - Oasis ROFL confidential compute runtime  
-- Multi-chain bridge infrastructure
 - EVM-compatible source chains
-
-## Security Considerations
-
-- All bridge messages require multi-oracle consensus (Hashi pattern)
-- ROFL provides confidential compute guarantees
-- Private keys are managed by ROFL runtime
-- Network communication is secured through ROFL
