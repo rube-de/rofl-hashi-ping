@@ -108,11 +108,10 @@ class TargetChainConfig:
 class MonitoringConfig:
     """Configuration for event monitoring and processing."""
 
-    # Sensible defaults for oracle operations
-    polling_interval: int = 12  # seconds between event polls
-    lookback_blocks: int = 100  # blocks to look back on startup
-    request_timeout: int = 30  # HTTP request timeout in seconds
-    retry_count: int = 3  # retry attempts for operations
+    polling_interval: int  # seconds between event polls
+    lookback_blocks: int  # blocks to look back on startup
+    request_timeout: int  # HTTP request timeout in seconds
+    retry_count: int  # retry attempts for operations
 
     def __post_init__(self) -> None:
         """Validate monitoring configuration."""
@@ -250,7 +249,7 @@ class OracleConfig:
 
         # Load monitoring config
         polling_interval = int(os.environ.get("POLLING_INTERVAL", "12"))
-        lookback_blocks = int(os.environ.get("LOOKBACK_BLOCKS", "100"))
+        lookback_blocks = int(os.environ.get("LOOKBACK_BLOCKS", "9"))
         request_timeout = int(os.environ.get("REQUEST_TIMEOUT", "30"))
         retry_count = int(os.environ.get("RETRY_COUNT", "3"))
 

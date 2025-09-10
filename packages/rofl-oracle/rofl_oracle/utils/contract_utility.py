@@ -68,7 +68,7 @@ class ContractUtility:
             json.JSONDecodeError: If the contract file is invalid JSON
         """
         contract_path: Path = (
-            Path(__file__).parent.parent.parent.parent
+            Path(__file__).parent.parent.parent
             / "contracts"
             / f"{contract_name}.json"
         ).resolve()

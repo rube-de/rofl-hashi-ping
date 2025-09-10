@@ -67,7 +67,7 @@ async def main() -> None:
     try:
         # Load configuration from environment
         config: OracleConfig = OracleConfig.from_env(local_mode=args.local)
-        header_oracle: HeaderOracle = HeaderOracle(config)
+        header_oracle: HeaderOracle = await HeaderOracle.create(config)
         await header_oracle.run()
 
     except ValueError as e:

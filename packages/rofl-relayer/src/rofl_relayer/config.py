@@ -32,7 +32,7 @@ class MonitoringConfig:
     # Hard-coded sensible defaults for MVP
     polling_interval: int = 12  # seconds
     retry_count: int = 3
-    lookback_blocks: int = 100
+    lookback_blocks: int = 9
     websocket_timeout: int = 60  # seconds
     process_batch_size: int = 10  # max events to process in one batch
     
