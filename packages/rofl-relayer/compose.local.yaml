@@ -8,7 +8,7 @@ services:
     container_name: rofl_relayer_local
     entrypoint: /bin/sh -c 'uv run python main.py --local'
     env_file:
-      - .env.local
+      - .env
     environment:
       # Python configuration
       PYTHONUNBUFFERED: 1  # Disable output buffering for immediate log visibility

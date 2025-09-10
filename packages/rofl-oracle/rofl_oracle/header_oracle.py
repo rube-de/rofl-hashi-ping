@@ -21,7 +21,19 @@ class HeaderOracle:
     and submits them to the ROFLAdapter contract on Oasis Sapphire.
     """
 
-    def __init__(self, config: OracleConfig) -> None:
+    @classmethod
+    async def create(cls, config: OracleConfig) -> "HeaderOracle":
+        """
+        Factory method to create and initialize HeaderOracle asynchronously.
+        
+        :param config: Oracle configuration object
+        :return: Initialized HeaderOracle instance
+        """
+        instance = cls()
+        await instance._initialize(config)
+        return instance
+
+    async def _initialize(self, config: OracleConfig) -> None:
         """
         Initialize the HeaderOracle with configuration.
 
@@ -40,7 +52,11 @@ class HeaderOracle:
                 # Initialize ROFL utility
                 logger.debug("Initializing ROFL utility...")
                 self.rofl_utility = RoflUtility()
-                self.secret = None
+                
+                # Generate/fetch oracle signing key
+                logger.info("Generating oracle signing key from ROFL...")
+                self.secret = await self.rofl_utility.fetch_key("rofl-oracle-signer")
+                logger.info("Oracle signing key generated successfully")
             else:
                 # Use local private key for testing
                 logger.debug("Using local private key (LOCAL MODE)")
@@ -48,12 +64,12 @@ class HeaderOracle:
                 self.rofl_utility = None
                 logger.debug("Local private key loaded")
 
-            # Initialize contract utility (secret only needed for local mode)
-            logger.debug("Initializing contract utility...")
+            # Initialize contract utility with secret for both modes
+            logger.debug("Initializing contract utility with signing key...")
             self.contract_utility = ContractUtility(
                 config.target_chain.rpc_url, self.secret
             )
-            logger.debug("Contract utility initialized")
+            logger.debug("Contract utility initialized with signing capability")
 
             # Connect to source chain for block fetching
             logger.debug(
@@ -90,6 +106,24 @@ class HeaderOracle:
                 request_timeout=config.monitoring.request_timeout,
             )
             logger.debug("Block submitter initialized")
+            
+            # Register oracle address if in ROFL mode
+            if not config.local_mode:
+                oracle_address = self.contract_utility.w3.eth.default_account
+                logger.info(f"Oracle address: {oracle_address}")
+                
+                # Check if oracle is already registered
+                current_oracle = await self.block_submitter.get_registered_oracle()
+                
+                if current_oracle != oracle_address:
+                    logger.info("Registering oracle address with ROFLAdapter...")
+                    success = await self.block_submitter.register_oracle()
+                    if success:
+                        logger.info(f"Oracle address {oracle_address} registered successfully")
+                    else:
+                        raise Exception(f"Failed to register oracle address {oracle_address}")
+                else:
+                    logger.info(f"Oracle address {oracle_address} already registered")
 
             # Initialize event processor
             logger.debug("Initializing event processor...")
