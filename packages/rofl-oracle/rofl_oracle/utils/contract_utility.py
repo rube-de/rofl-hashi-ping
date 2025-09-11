@@ -67,7 +67,7 @@ class ContractUtility:
         """
         contract_path: Path = (
             Path(__file__).parent.parent.parent
-            / "contracts"
+            / "abis"
             / f"{contract_name}.json"
         ).resolve()
 
