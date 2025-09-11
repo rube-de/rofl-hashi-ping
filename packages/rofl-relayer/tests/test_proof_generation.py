@@ -147,6 +147,7 @@ async def test_proof_matches_typescript():
                     f"❌ {element_name}: Length mismatch (Python: {len(python_val)}, TypeScript: {len(typescript_val)})"
                 )
                 all_match = False
+                match = False  # Set match to False for length mismatches
             else:
                 # Compare each element, normalizing hex strings
                 match = all(
@@ -172,9 +173,9 @@ async def test_proof_matches_typescript():
                     print(f"✅ {element_name}: Match ({python_normalized})")
             else:
                 print(f"❌ {element_name}: Mismatch")
-                if isinstance(python_val, str) and len(str(python_normalized)) > 50:
-                    print(f"   Python:     {str(python_normalized)[:50]}...")
-                    print(f"   TypeScript: {str(typescript_normalized)[:50]}...")
+                if isinstance(python_val, str) and len(python_normalized) > 50:
+                    print(f"   Python:     {python_normalized[:50]}...")
+                    print(f"   TypeScript: {typescript_normalized[:50]}...")
                 else:
                     print(f"   Python:     {python_normalized}")
                     print(f"   TypeScript: {typescript_normalized}")
