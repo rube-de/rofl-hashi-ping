@@ -6,7 +6,6 @@ services:
     image: ghcr.io/rube-de/rofl-header-oracle:latest
     platform: linux/amd64
     container_name: rofl_header_oracle
-    entrypoint: /bin/sh -c 'uv run python main.py'
     environment:
       # Python configuration
       PYTHONUNBUFFERED: 1  # Disable output buffering for immediate log visibility

@@ -61,7 +61,7 @@ class TestRoflUtility(unittest.IsolatedAsyncioTestCase):
 
         # Verify request was made correctly
         mock_client.post.assert_called_once_with(
-            "http://localhost/test/path", json={"test": "data"}, timeout=30.0
+            "http://localhost/test/path", json={"test": "data"}, timeout=60.0
         )
         assert result == {"result": "success"}
 
@@ -82,7 +82,7 @@ class TestRoflUtility(unittest.IsolatedAsyncioTestCase):
         mock_client.post.assert_called_once_with(
             "http://test.server:8080/test/path",
             json={"test": "data"},
-            timeout=30.0,
+            timeout=60.0,
         )
         assert result == {"result": "success"}
 
@@ -258,7 +258,7 @@ class TestRoflUtility(unittest.IsolatedAsyncioTestCase):
 
     @patch("rofl_oracle.utils.rofl_utility.httpx.AsyncClient")
     async def test_timeout_configuration(self, mock_client_class):
-        """Test that timeout is correctly set to 30 seconds."""
+        """Test that timeout is correctly set to 60 seconds."""
         mock_client = AsyncMock()
         mock_response = MagicMock()
         mock_response.json = MagicMock(return_value={"result": "success"})
@@ -269,9 +269,9 @@ class TestRoflUtility(unittest.IsolatedAsyncioTestCase):
         utility = RoflUtility()
         await utility._appd_post("/test/path", {"test": "data"})
 
-        # Verify timeout was set to 30 seconds
+        # Verify timeout was set to 60 seconds
         mock_client.post.assert_called_once()
-        assert mock_client.post.call_args[1]["timeout"] == 30.0
+        assert mock_client.post.call_args[1]["timeout"] == 60.0
 
 
 if __name__ == "__main__":
