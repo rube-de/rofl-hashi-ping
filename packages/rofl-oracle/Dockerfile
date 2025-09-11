@@ -20,9 +20,8 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen
 
 # Copy source code
-COPY main.py ./
 COPY rofl_oracle/ ./rofl_oracle/
 COPY contracts/ ./contracts/
 
-# Run the oracle
-ENTRYPOINT ["uv", "run", "python", "main.py"]
+# Run the oracle using module execution
+ENTRYPOINT ["uv", "run", "python", "-m", "rofl_oracle"]
