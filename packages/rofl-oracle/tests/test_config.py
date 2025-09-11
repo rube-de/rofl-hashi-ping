@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from rofl_oracle.config import (
+    MonitoringConfig,
     OracleConfig,
     SourceChainConfig,
     TargetChainConfig,
@@ -90,34 +91,34 @@ class TestTargetChainConfig:
     def test_valid_target_config(self):
         """Test creating a valid target chain configuration."""
         config = TargetChainConfig(
-            network="sapphire-testnet",
+            rpc_url="https://testnet.sapphire.oasis.io",
             contract_address="0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
         )
 
-        assert config.network == "sapphire-testnet"
+        assert config.rpc_url == "https://testnet.sapphire.oasis.io"
         assert (
             config.contract_address
             == "0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d"
         )
 
     def test_supported_networks(self):
-        """Test that all supported networks are accepted."""
-        for network in [
-            "sapphire-localnet",
-            "sapphire-testnet",
-            "sapphire-mainnet",
+        """Test that various RPC URLs are accepted."""
+        for rpc_url in [
+            "http://localhost:8545",
+            "https://testnet.sapphire.oasis.io",
+            "wss://mainnet.sapphire.oasis.io",
         ]:
             config = TargetChainConfig(
-                network=network,
+                rpc_url=rpc_url,
                 contract_address="0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
             )
-            assert config.network == network
+            assert config.rpc_url == rpc_url
 
     def test_unsupported_network(self):
-        """Test that unsupported networks are rejected."""
-        with pytest.raises(ValueError, match="Unsupported network"):
+        """Test that invalid RPC URL schemes are rejected."""
+        with pytest.raises(ValueError, match="Invalid RPC URL scheme"):
             TargetChainConfig(
-                network="invalid-network",
+                rpc_url="ftp://invalid-scheme",
                 contract_address="0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
             )
 
@@ -126,7 +127,7 @@ class TestTargetChainConfig:
         with pytest.raises(
             ValueError, match="Target contract address is required"
         ):
-            TargetChainConfig(network="sapphire-testnet", contract_address="")
+            TargetChainConfig(rpc_url="https://testnet.sapphire.oasis.io", contract_address="")
 
 
 class TestOracleConfig:
@@ -139,51 +140,57 @@ class TestOracleConfig:
             contract_address="0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
         )
         target = TargetChainConfig(
-            network="sapphire-testnet",
+            rpc_url="https://testnet.sapphire.oasis.io",
             contract_address="0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
+        )
+        monitoring = MonitoringConfig(
+            polling_interval=12,
+            lookback_blocks=10,
+            request_timeout=30,
+            retry_count=3,
         )
 
         config = OracleConfig(
-            source_chain=source, target_chain=target, polling_interval=12
+            source_chain=source, target_chain=target, monitoring=monitoring
         )
 
         assert config.source_chain == source
         assert config.target_chain == target
-        assert config.polling_interval == 12
+        assert config.monitoring.polling_interval == 12
         assert config.local_mode is False
         assert config.local_private_key is None
 
     def test_polling_interval_validation(self):
         """Test polling interval validation."""
-        source = SourceChainConfig(
-            rpc_url="https://test.rpc",
-            contract_address="0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
-        )
-        target = TargetChainConfig(
-            network="sapphire-testnet",
-            contract_address="0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
-        )
-
         # Test zero interval
         with pytest.raises(
             ValueError, match="Polling interval must be positive"
         ):
-            OracleConfig(
-                source_chain=source, target_chain=target, polling_interval=0
+            MonitoringConfig(
+                polling_interval=0,
+                lookback_blocks=10,
+                request_timeout=30,
+                retry_count=3,
             )
 
         # Test negative interval
         with pytest.raises(
             ValueError, match="Polling interval must be positive"
         ):
-            OracleConfig(
-                source_chain=source, target_chain=target, polling_interval=-1
+            MonitoringConfig(
+                polling_interval=-1,
+                lookback_blocks=10,
+                request_timeout=30,
+                retry_count=3,
             )
 
         # Test too long interval
         with pytest.raises(ValueError, match="Polling interval too long"):
-            OracleConfig(
-                source_chain=source, target_chain=target, polling_interval=301
+            MonitoringConfig(
+                polling_interval=301,
+                lookback_blocks=10,
+                request_timeout=30,
+                retry_count=3,
             )
 
     def test_local_mode_requires_private_key(self):
@@ -193,8 +200,14 @@ class TestOracleConfig:
             contract_address="0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
         )
         target = TargetChainConfig(
-            network="sapphire-testnet",
+            rpc_url="https://testnet.sapphire.oasis.io",
             contract_address="0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
+        )
+        monitoring = MonitoringConfig(
+            polling_interval=12,
+            lookback_blocks=10,
+            request_timeout=30,
+            retry_count=3,
         )
 
         with pytest.raises(
@@ -203,6 +216,7 @@ class TestOracleConfig:
             OracleConfig(
                 source_chain=source,
                 target_chain=target,
+                monitoring=monitoring,
                 local_mode=True,
                 local_private_key=None,
             )
@@ -214,14 +228,21 @@ class TestOracleConfig:
             contract_address="0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
         )
         target = TargetChainConfig(
-            network="sapphire-testnet",
+            rpc_url="https://testnet.sapphire.oasis.io",
             contract_address="0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
+        )
+        monitoring = MonitoringConfig(
+            polling_interval=12,
+            lookback_blocks=10,
+            request_timeout=30,
+            retry_count=3,
         )
 
         # Valid key with 0x prefix
         config = OracleConfig(
             source_chain=source,
             target_chain=target,
+            monitoring=monitoring,
             local_mode=True,
             local_private_key="0x" + "a" * 64,
         )
@@ -231,6 +252,7 @@ class TestOracleConfig:
         config = OracleConfig(
             source_chain=source,
             target_chain=target,
+            monitoring=monitoring,
             local_mode=True,
             local_private_key="b" * 64,
         )
@@ -243,14 +265,21 @@ class TestOracleConfig:
             contract_address="0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
         )
         target = TargetChainConfig(
-            network="sapphire-testnet",
+            rpc_url="https://testnet.sapphire.oasis.io",
             contract_address="0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
+        )
+        monitoring = MonitoringConfig(
+            polling_interval=12,
+            lookback_blocks=10,
+            request_timeout=30,
+            retry_count=3,
         )
 
         with pytest.raises(ValueError, match="Invalid private key length"):
             OracleConfig(
                 source_chain=source,
                 target_chain=target,
+                monitoring=monitoring,
                 local_mode=True,
                 local_private_key="0x" + "a" * 63,  # Too short
             )
@@ -262,14 +291,21 @@ class TestOracleConfig:
             contract_address="0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
         )
         target = TargetChainConfig(
-            network="sapphire-testnet",
+            rpc_url="https://testnet.sapphire.oasis.io",
             contract_address="0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
+        )
+        monitoring = MonitoringConfig(
+            polling_interval=12,
+            lookback_blocks=10,
+            request_timeout=30,
+            retry_count=3,
         )
 
         with pytest.raises(ValueError, match="Invalid private key format"):
             OracleConfig(
                 source_chain=source,
                 target_chain=target,
+                monitoring=monitoring,
                 local_mode=True,
                 local_private_key="0x" + "g" * 64,  # Invalid hex
             )
@@ -280,8 +316,11 @@ class TestOracleConfig:
             "SOURCE_RPC_URL": "https://test.rpc",
             "SOURCE_CONTRACT_ADDRESS": "0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
             "CONTRACT_ADDRESS": "0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
-            "NETWORK": "sapphire-testnet",
+            "TARGET_RPC_URL": "https://testnet.sapphire.oasis.io",
             "POLLING_INTERVAL": "20",
+            "LOOKBACK_BLOCKS": "10",
+            "REQUEST_TIMEOUT": "30",
+            "RETRY_COUNT": "3",
         },
     )
     def test_from_env(self):
@@ -293,12 +332,15 @@ class TestOracleConfig:
             config.source_chain.contract_address
             == "0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d"
         )
-        assert config.target_chain.network == "sapphire-testnet"
+        assert config.target_chain.rpc_url == "https://testnet.sapphire.oasis.io"
         assert (
             config.target_chain.contract_address
             == "0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d"
         )
-        assert config.polling_interval == 20
+        assert config.monitoring.polling_interval == 20
+        assert config.monitoring.lookback_blocks == 10
+        assert config.monitoring.request_timeout == 30
+        assert config.monitoring.retry_count == 3
         assert config.local_mode is False
 
     @patch.dict(
@@ -317,10 +359,11 @@ class TestOracleConfig:
         assert config.local_mode is True
         assert config.local_private_key == "0x" + "a" * 64
 
-    @patch.dict(os.environ, {})
+    @patch.dict(os.environ, {}, clear=True)
     def test_from_env_missing_required(self):
         """Test that missing required environment variables raise errors."""
-        with pytest.raises(ValueError, match="SOURCE_CONTRACT_ADDRESS"):
+        # SOURCE_CONTRACT_ADDRESS is required
+        with pytest.raises(ValueError, match="SOURCE_CONTRACT_ADDRESS environment variable is required"):
             OracleConfig.from_env()
 
     @patch.dict(
@@ -328,10 +371,12 @@ class TestOracleConfig:
         {
             "SOURCE_CONTRACT_ADDRESS": "0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d"
         },
+        clear=True
     )
     def test_from_env_missing_target_contract(self):
         """Test that missing target contract raises an error."""
-        with pytest.raises(ValueError, match="CONTRACT_ADDRESS"):
+        # TARGET_CONTRACT_ADDRESS (CONTRACT_ADDRESS) is required
+        with pytest.raises(ValueError, match="CONTRACT_ADDRESS environment variable is required"):
             OracleConfig.from_env()
 
     def test_with_chain_id(self):
@@ -341,11 +386,17 @@ class TestOracleConfig:
             contract_address="0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
         )
         target = TargetChainConfig(
-            network="sapphire-testnet",
+            rpc_url="https://testnet.sapphire.oasis.io",
             contract_address="0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
         )
+        monitoring = MonitoringConfig(
+            polling_interval=12,
+            lookback_blocks=10,
+            request_timeout=30,
+            retry_count=3,
+        )
 
-        config = OracleConfig(source_chain=source, target_chain=target)
+        config = OracleConfig(source_chain=source, target_chain=target, monitoring=monitoring)
 
         # Initially no chain ID
         assert config.source_chain.chain_id is None
@@ -358,7 +409,7 @@ class TestOracleConfig:
         # Other fields unchanged
         assert new_config.source_chain.rpc_url == config.source_chain.rpc_url
         assert new_config.target_chain == config.target_chain
-        assert new_config.polling_interval == config.polling_interval
+        assert new_config.monitoring.polling_interval == config.monitoring.polling_interval
 
     def test_log_config(self, caplog):
         """Test configuration logging."""
@@ -368,14 +419,20 @@ class TestOracleConfig:
             chain_id=1,
         )
         target = TargetChainConfig(
-            network="sapphire-testnet",
+            rpc_url="https://testnet.sapphire.oasis.io",
             contract_address="0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
+        )
+        monitoring = MonitoringConfig(
+            polling_interval=15,
+            lookback_blocks=10,
+            request_timeout=30,
+            retry_count=3,
         )
 
         config = OracleConfig(
             source_chain=source,
             target_chain=target,
-            polling_interval=15,
+            monitoring=monitoring,
             local_mode=True,
             local_private_key="0x" + "a" * 64,
         )
@@ -387,7 +444,7 @@ class TestOracleConfig:
         assert "ROFL Oracle Configuration" in log_text
         assert "https://test.rpc" in log_text
         assert "Chain ID: 1" in log_text
-        assert "sapphire-testnet" in log_text
+        assert "https://testnet.sapphire.oasis.io" in log_text
         assert "15 seconds" in log_text
         assert "Mode: LOCAL" in log_text
         assert "Local Key: [CONFIGURED]" in log_text
@@ -399,15 +456,21 @@ class TestOracleConfig:
             contract_address="0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
         )
         target = TargetChainConfig(
-            network="sapphire-testnet",
+            rpc_url="https://testnet.sapphire.oasis.io",
             contract_address="0x85BfE05492aFC3D04Ff3B2ca6771ACF6f853d90d",
         )
+        monitoring = MonitoringConfig(
+            polling_interval=12,
+            lookback_blocks=10,
+            request_timeout=30,
+            retry_count=3,
+        )
 
-        config = OracleConfig(source_chain=source, target_chain=target)
+        config = OracleConfig(source_chain=source, target_chain=target, monitoring=monitoring)
 
         # Cannot modify attributes
         with pytest.raises(AttributeError):
-            config.polling_interval = 30
+            config.monitoring.polling_interval = 30
 
         with pytest.raises(AttributeError):
             config.source_chain.rpc_url = "https://new.rpc"

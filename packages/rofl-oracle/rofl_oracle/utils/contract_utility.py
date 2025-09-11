@@ -29,8 +29,6 @@ class ContractUtility:
             raise ValueError("RPC URL is required")
 
         self.rpc_url = rpc_url
-
-        # Always create Web3 instance with RPC
         self.w3 = Web3(Web3.HTTPProvider(self.rpc_url))
 
         # Add signing middleware only if secret is provided

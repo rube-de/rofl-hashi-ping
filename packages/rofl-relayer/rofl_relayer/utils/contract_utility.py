@@ -29,8 +29,6 @@ class ContractUtility:
             raise ValueError("RPC URL is required")
 
         self.rpc_url = rpc_url
-
-        # Always create Web3 instance with RPC
         self.w3 = Web3(Web3.HTTPProvider(self.rpc_url))
 
         # Add signing middleware only if secret is provided
@@ -66,7 +64,9 @@ class ContractUtility:
             json.JSONDecodeError: If the contract file is invalid JSON
         """
         contract_path: Path = (
-            Path(__file__).parent.parent.parent / "contracts" / f"{contract_name}.json"
+            Path(__file__).parent.parent.parent
+            / "contracts"
+            / f"{contract_name}.json"
         ).resolve()
 
         with contract_path.open() as file:
