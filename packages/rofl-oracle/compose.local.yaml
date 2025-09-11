@@ -6,7 +6,7 @@ services:
     image: ghcr.io/rube-de/rofl-header-oracle:latest
     platform: linux/amd64
     container_name: rofl_header_oracle
-    entrypoint: /bin/sh -c 'uv run python main.py --local'
+    entrypoint: /bin/sh -c 'uv run python -m rofl_oracle --local --log-level DEBUG'
     environment:
       # Python configuration
       PYTHONUNBUFFERED: 1  # Disable output buffering for immediate log visibility
@@ -15,8 +15,8 @@ services:
       SOURCE_RPC_URL: ${SOURCE_RPC_URL:-https://ethereum.publicnode.com}
       SOURCE_CONTRACT_ADDRESS: ${SOURCE_CONTRACT_ADDRESS:-}  # Required - BlockHeaderRequester contract address
       
-      # Target Sapphire network configuration
-      NETWORK: ${NETWORK:-sapphire-testnet}
+      # Target chain configuration
+      TARGET_RPC_URL: ${TARGET_RPC_URL:-https://testnet.sapphire.oasis.io}
       CONTRACT_ADDRESS: ${CONTRACT_ADDRESS:-}  # Required - ROFLAdapter contract address
       
       # Oracle configuration
